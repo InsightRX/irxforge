@@ -1,0 +1,26 @@
+Package: irxforge
+Title: Forging data for pharmacometric analyses
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Ron", "Keizer", email = "ron@insight-rx.com", role = c("cre", "aut")),
+    person("InsightRX", role = "cph")
+  )
+Author: Ron Keizer
+Maintainer: Ron Keizer <ron@insight-rx.com>
+Description: Functions for parsing, converting, and generating data for pharmacometric analyses.
+Imports:
+    dplyr,
+    lubridate,
+    rlang,
+    stringr,
+    tidyr,
+    jsonlite,
+    irxutils
+Suggests:
+    testthat (>= 3.2.0),
+    withr
+License: file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Config/testthat/edition: 3
