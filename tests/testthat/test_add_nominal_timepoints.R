@@ -1,12 +1,9 @@
 test_that("Adding nominal timepoints works", {
 
-  dat <- pharmaair::get_example_dataset("genentech", "test_mod_1")$test_mod_1
-  dat2 <- dat |>
-    dplyr::select(ID, TIME = time, TAD = tad, EVID = evid)
   expect_message(
     dat <- add_nominal_timepoints(
-      dat,
-      "time",
+      nm_data_timepoints,
+      "TIME",
       "NOM_TIME",
       adjust = 0.7,
       verbose = TRUE
