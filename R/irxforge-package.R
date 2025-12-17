@@ -1,8 +1,8 @@
 #' irxforge package
 #'
-#' Extension functionality for pharmr (Pharmpy)
+#' Package for generating, parsing, and converting pharmacometric data
 #'
-#' @name pharmr.extra
+#' @name irxforge
 #'
 #' @importFrom irxutils %<=% %>=% is_continuous
 #' @importFrom dplyr %>%
