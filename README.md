@@ -6,10 +6,12 @@
 <!-- badges: start -->
 
 [![R-CMD-check](https://github.com/InsightRX/irxforge/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/InsightRX/irxforge/actions/workflows/R-CMD-check.yaml)
+[![Codecov test
+coverage](https://codecov.io/gh/InsightRX/irxforge/graph/badge.svg)](https://app.codecov.io/gh/InsightRX/irxforge)
 <!-- badges: end -->
 
-`irxforge` is an R package for generating, parsing, and converting
-datasets in pharmacometrics.
+`irxforge` is an R package for generating, parsing, and converting data
+sets in pharmacometrics.
 
 ## Installation
 
