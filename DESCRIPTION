@@ -3,11 +3,13 @@ Title: Forging data for pharmacometric analyses
 Version: 0.0.0.9000
 Authors@R: c(
     person("Ron", "Keizer", email = "ron@insight-rx.com", role = c("cre", "aut")),
+    person("Michael", "McCarthy", email = "michael.mccarthy@insight-rx.com", role = "ctb"),
     person("InsightRX", role = "cph")
   )
-Author: Ron Keizer
-Maintainer: Ron Keizer <ron@insight-rx.com>
 Description: Functions for parsing, converting, and generating data for pharmacometric analyses.
+License: file LICENSE
+Depends: 
+    R (>= 3.5)
 Imports:
     dplyr,
     lubridate,
@@ -19,11 +21,10 @@ Imports:
 Suggests:
     testthat (>= 3.2.0),
     withr
-License: file LICENSE
+Remotes:
+  InsightRX/irxutils
+Config/testthat/edition: 3
 Encoding: UTF-8
+LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
-Config/testthat/edition: 3
-Depends: 
-    R (>= 3.5)
-LazyData: true
