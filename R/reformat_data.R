@@ -35,23 +35,23 @@ reformat_data <- function(
   output_type <- rlang::arg_match(output_type)
 
   ## If needed, try to detect type for input data
-  if(is.null(input_type) || input_type == "auto") {
-    input_type <- detect_dataset_type(dat)
+  if (is.null(input_type) || input_type == "auto") {
+    input_type <- detect_dataset_type(data)
   }
   
   ## Reformat SDTM datasets
-  if(input_type == "sdtm") {
-    if(output_type != "modeling") {
+  if (input_type == "sdtm") {
+    if (output_type != "modeling") {
       not_supported_reformat(input_type, output_type)
     }
     new_data <- reformat_data_sdtm_to_modeling(data, dictionary, ...)
   } else if(input_type == "nca") {
-    if(output_type != "modeling") {
+    if (output_type != "modeling") {
       not_supported_reformat(input_type, output_type)
     }
     new_data <- reformat_data_nca_to_modeling(data, dictionary, ...)
   } else if(input_type == "modeling") {
-    if(output_type == "modeling") {
+    if (output_type == "modeling") {
       new_data <- reformat_data_modeling_to_modeling(data, dictionary, ...)
     } else if (output_type == "nca") {
       new_data <- reformat_data_modeling_to_nca(data, dictionary, ...)
@@ -81,13 +81,13 @@ not_supported_reformat <- function(input_type, output_type) {
 detect_dataset_type <- function(data) {
   ## TODO: Fairly crude auto-detection, probably OK for 90% of dataset, but 
   ## should add more advanced checks.
-  if(inherits(data, "list")) {
+  if (inherits(data, "list")) {
     return("sdtm")
   }
-  if(!inherits(data, "data.frame")) {
+  if (!inherits(data, "data.frame")) {
     stop("Unsupported data type, expecting either a list or a data.frame.")    
   }
-  if("evid" %in% tolower(names(data))) {
+  if ("evid" %in% tolower(names(data))) {
     return("modeling")
   } else {
     return("nca")

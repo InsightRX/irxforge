@@ -8,23 +8,22 @@
 #' @export
 #'
 sample_covariates_bootstrap <- function(
-    data,
-    n_subjects = nrow(data),
-    conditional = NULL,
-    ...
+  data,
+  n_subjects = nrow(data),
+  conditional = NULL,
+  ...
 ) {
-  
   if(!is.null(conditional)) {
     for(key in names(conditional)) {
-      data <- data |>
-        dplyr::filter(.data[[key]] >= min(conditional[[key]]) & .data[[key]] <= max(conditional[[key]])) 
+      data <- dplyr::filter(
+        data,
+        .data[[key]] >= min(conditional[[key]]) & 
+        .data[[key]] <= max(conditional[[key]])
+      )
     }
   }
-
-  row_idx <- sample(
-    x = 1:nrow(data), 
-    size = n_subjects, 
-    replace = TRUE
-  )
-  data[row_idx,]
+  if (nrow(data) == 0) {
+    stop("No observations present within the conditional limits for the sampled population.")
+  }
+  dplyr::slice_sample(data, n = n_subjects, replace = TRUE)
 }

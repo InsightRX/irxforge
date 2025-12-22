@@ -7,7 +7,8 @@ dataset}
 \usage{
 reformat_data_nca_to_modeling(
   data,
-  dictionary = NULL,
+  dictionary = list(subject_id = "ID", group = "GROUP", time = "TIME", dose = "AMT", conc
+    = "DV"),
   dose_compartment = 1,
   obs_compartment = 1,
   covariates = NULL

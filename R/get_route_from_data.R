@@ -10,9 +10,7 @@
 #' 
 #' @export
 #' 
-get_route_from_data_column <- function(
-    x
-  ) {
+get_route_from_data_column <- function(x) {
   x <- x[!is.na(x)]
   if(length(unique(x)) > 1) {
     warning("Multiple routes in clinical trial database, this is not yet supported. Analysis may be incorrect.")

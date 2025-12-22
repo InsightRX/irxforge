@@ -11,13 +11,17 @@ License: file LICENSE
 Depends: 
     R (>= 3.5)
 Imports:
+    admiral,
     dplyr,
+    irxutils,
     lubridate,
+    mice (>= 3.7.5),
+    mvtnorm,
     rlang,
     stringr,
+    tibble,
     tidyr,
-    jsonlite,
-    irxutils
+    tidyselect
 Suggests:
     testthat (>= 3.2.0),
     withr

@@ -13,8 +13,5 @@ sample_covariates <- function(
   ...
 ) {
   method <- match.arg(method)
-  do.call(
-    paste0("sample_covariates_", method), 
-    args = list(...)
-  )
+  do.call(paste0("sample_covariates_", method), args = list(...))
 }

@@ -1,7 +1,6 @@
 #' Get nominal timepoints based on vector of timepoints
 #' 
 #' @param t vector of timepoints
-#' Get nominal timepoints for a given vector of timepoints
 #' @param adjust sensitivity for peaks in the density curve to detect nominal
 #' timepoints. A factor of 0.5 often works well for PK data.
 #' @param ... optional arguments passed to `stats::density` function in addition
@@ -13,24 +12,21 @@
 #' @export
 #' 
 get_nominal_timepoints <- function(
-    t, 
-    adjust = 0.5,
-    ...
+  t, 
+  adjust = 0.5,
+  ...
 ) {
   kernel <- stats::density(t, adjust = adjust, ...)
-  peaks <- data.frame(
-    time = kernel$x,
-    y = kernel$y
-  ) %>%
-    dplyr::arrange(time) %>%
+  peaks <- data.frame(time = kernel$x, y = kernel$y) |>
+    dplyr::arrange(.data$time) |>
     dplyr::mutate( # find peaks (where dy/dt changes negative)
-      delta = c(diff(y), 0),
-      delta_prv = c(0, delta[-length(delta)]),
-      peak = delta < 0 & delta_prv >= 0
-    ) %>%
-    dplyr::filter(peak)
+      delta = c(diff(.data$y), 0),
+      delta_prv = c(0, .data$delta[-length(.data$delta)]),
+      peak = .data$delta < 0 & .data$delta_prv >= 0
+    ) |>
+    dplyr::filter(.data$peak)
 
-  t_nom <- c(floor(peaks$time[1:(nrow(peaks)-1)]), ceiling(tail(peaks$time,1)))
+  t_nom <- c(floor(peaks$time[1:(nrow(peaks)-1)]), ceiling(utils::tail(peaks$time,1)))
 
   t_nom
 }
