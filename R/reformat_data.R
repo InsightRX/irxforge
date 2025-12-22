@@ -1,26 +1,34 @@
-#' Reformat data between various dataset layouts
+#' Reformat data between various data set layouts
 #' 
-#' @param data dataset or list of datasets
-#' @param dictionary a data dictionary that maps expected variable names to 
-#' variables in the data.
-#' @param input_type type of input dataset. Can be one of `nca`, `modeling`, or
-#' `sdtm`. The types are defined as follows:
-#' - `nca`: a dataset with one row for every observed concentration measurement. 
-#' Time, concentration value, and administered dose are required columns.
-#' The dataset may contain any other variables, covariates, groupings etc in 
-#' columns.
-#' - `modeling`: a dataset with dose events (evid = 1), concentrations (evid = 
-#' 0), and potentially other events (events = 2) in separate rows. Dataset 
-#' requires columns for event type, time, dose amount, measured concentration.
-#' The dataset may contain any other variables, covariates, groupings etc in 
-#' columns.
-#' - `sdtm`: a list of various datasets or "domains", such as `ADSL` `DM`, `EX`, and 
-#' `DS`,  following the SDTM structure and nomenclature.
-#' @param output_type type of output dataset. Can be either `nca` or `modeling`.
+#' @param data A data set or list of data sets.
+#' @param dictionary A data dictionary that maps expected variable names to
+#'   variables in the data.
+#' @param input_type The type of input data set, defined as follows:
+#' - `"nca"`: a data set with one row for every observed concentration measurement.
+#'   Time, concentration value, and administered dose are required columns. The
+#'   data set may contain any other variables, covariates, groupings etc in
+#'   columns.
+#' - `"modeling"`: a data set with dose events (evid = 1), concentrations (evid =
+#'   0), and potentially other events (events = 2) in separate rows. Dataset
+#'   requires columns for event type, time, dose amount, measured concentration.
+#'   The dataset may contain any other variables, covariates, groupings etc in
+#'   columns.
+#' - `"sdtm"`: a list of various data sets or "domains", such as `ADSL` `DM`, `EX`, and
+#'   `DS`,  following the SDTM structure and nomenclature.
+#' @param output_type type of output dataset. Can be either `"nca"` or
+#'   `"modeling"`.
 #' @param ... passed onto specific reformatting functions:
-#' `reformat_data_nca_to_modeling`, `` 
+#' - `input_type = "nca"` and `output_type = "modeling"`:
+#'   [reformat_data_nca_to_modeling()]
+#' - `input_type = "sdtm"` and `output_type = "modeling"`:
+#'   [reformat_data_sdtm_to_modeling()]
+#' - `input_type = "modeling"` and `output_type = "modeling"`:
+#'   [reformat_data_modeling_to_modeling()]
+#' - `input_type = "modeling"` and `output_type = "nca"`:
+#'   [reformat_data_modeling_to_nca()]
 #' 
-#' @returns a data.frame in either `nca` or `modeling` format
+#' @returns
+#' A data.frame in the format specified by `output_type`.
 #' 
 #' @export
 #' 
@@ -58,8 +66,6 @@ reformat_data <- function(
     } else {
       not_supported_reformat(input_type, output_type, ...)
     }
-  } else {
-    stop("`input_type` not recognized.")
   }
   
   new_data
@@ -71,15 +77,18 @@ reformat_data <- function(
 #' @param output_type type of output
 #' 
 not_supported_reformat <- function(input_type, output_type) {
-  stop("Sorry, conversion from", input_type, "to", output_type, "is not supported yet.")
+  stop(
+    "Sorry, conversion from ", input_type, " to ", output_type,
+    " is not supported yet."
+  )
 }
 
-#' Auto-detect dataset type 
+#' Auto-detect data set type 
 #' 
 #' @param data a data.frame
 #' 
 detect_dataset_type <- function(data) {
-  ## TODO: Fairly crude auto-detection, probably OK for 90% of dataset, but 
+  ## TODO: Fairly crude auto-detection, probably OK for 90% of data sets, but 
   ## should add more advanced checks.
   if (inherits(data, "list")) {
     return("sdtm")

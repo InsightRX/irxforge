@@ -2,7 +2,7 @@
 % Please edit documentation in R/reformat_data.R
 \name{detect_dataset_type}
 \alias{detect_dataset_type}
-\title{Auto-detect dataset type}
+\title{Auto-detect data set type}
 \usage{
 detect_dataset_type(data)
 }
@@ -10,5 +10,5 @@ detect_dataset_type(data)
 \item{data}{a data.frame}
 }
 \description{
-Auto-detect dataset type
+Auto-detect data set type
 }

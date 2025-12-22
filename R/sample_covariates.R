@@ -12,6 +12,6 @@ sample_covariates <- function(
   method = c("mvtnorm", "mice", "bootstrap"),
   ...
 ) {
-  method <- match.arg(method)
+  method <- rlang::arg_match(method)
   do.call(paste0("sample_covariates_", method), args = list(...))
 }
