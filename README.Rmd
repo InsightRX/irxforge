@@ -37,4 +37,4 @@ See at [`https://insightrx.github.io/irxforge/`](https://insightrx.github.io/irx
 
 ## License
 
-© InsightRX
+MIT © InsightRX

@@ -7,7 +7,7 @@ Authors@R: c(
     person("InsightRX", role = "cph")
   )
 Description: Functions for parsing, converting, and generating data for pharmacometric analyses.
-License: file LICENSE
+License: MIT + file LICENSE
 Depends: 
     R (>= 3.5)
 Imports:

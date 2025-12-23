@@ -31,4 +31,4 @@ and also in the installed package: `help(package = "irxforge")`.
 
 ## License
 
-© InsightRX
+MIT © InsightRX
