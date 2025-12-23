@@ -19,12 +19,17 @@ add_nominal_timepoints(
 
 \item{nominal_time_var}{variable name for new nominal time vector}
 
-\item{...}{passed as argument to \code{get_nominal_timepoints()} and
-to \code{stats::density()}.}
+\item{verbose}{Logical.}
+
+\item{...}{passed as argument to \code{\link[=get_nominal_timepoints]{get_nominal_timepoints()}} and to
+\code{stats::density()}.}
 }
 \value{
 data.frame or tibble
 }
 \description{
 Add nominal timepoints to a dataset
+}
+\seealso{
+\code{\link[=get_nominal_timepoints]{get_nominal_timepoints()}}
 }

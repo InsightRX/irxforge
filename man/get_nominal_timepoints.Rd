@@ -7,8 +7,7 @@
 get_nominal_timepoints(t, adjust = 0.5, ...)
 }
 \arguments{
-\item{t}{vector of timepoints
-Get nominal timepoints for a given vector of timepoints}
+\item{t}{vector of timepoints}
 
 \item{adjust}{sensitivity for peaks in the density curve to detect nominal
 timepoints. A factor of 0.5 often works well for PK data.}

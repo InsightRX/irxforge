@@ -5,7 +5,7 @@
 \alias{nm_data_timepoints}
 \title{Example dataset with timepoints in a NONMEM dataset}
 \format{
-An object of class \code{data.frame} with 3600 rows and 20 columns.
+An object of class \code{data.frame} with 3600 rows and 4 columns.
 }
 \usage{
 nm_data_timepoints

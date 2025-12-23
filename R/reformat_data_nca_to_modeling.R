@@ -16,7 +16,13 @@
 #' 
 reformat_data_nca_to_modeling <- function(
   data, 
-  dictionary = NULL,
+  dictionary = list(
+    subject_id = "ID",
+    group = "GROUP",
+    time = "TIME",
+    dose = "AMT",
+    conc = "DV"
+  ),
   dose_compartment = 1,
   obs_compartment = 1,
   covariates = NULL
@@ -34,13 +40,13 @@ reformat_data_nca_to_modeling <- function(
   }
   
   ## IDs
-  ids <- data %>%
-    dplyr::select(ORIGID = dictionary$subject_id) %>%
-    dplyr::slice(1, .by = ORIGID) %>%
-    dplyr::mutate(ID = 1:nrow(.))
+  ids <- data |>
+    dplyr::select(ORIGID = dictionary$subject_id) |>
+    dplyr::slice(1, .by = "ORIGID") |>
+    dplyr::mutate(ID = 1:dplyr::n())
   
   ## Doses
-  doses <- data %>%
+  doses <- data |>
     dplyr::select(
       TIME = !!dictionary$time,
       ORIGID = !!dictionary$subject_id,
@@ -48,38 +54,40 @@ reformat_data_nca_to_modeling <- function(
       AMT = !!dictionary$dose,
       !!covariates
     ) |>
-    dplyr::mutate(TIME, EVID = 1, MDV = 1, DV = 0, CMT = dose_compartment) |>
-    dplyr::left_join(ids)
+    dplyr::mutate(EVID = 1, MDV = 1, DV = 0, CMT = dose_compartment) |>
+    dplyr::left_join(ids, by = dplyr::join_by("ORIGID"))
   if(nrow(doses) == nrow(data)) { # Dose is given as a column, and not row-wise using EVID
     doses <- doses |>
-      dplyr::group_by(ORIGID, GROUP) |>
+      dplyr::group_by("ORIGID", "GROUP") |>
       dplyr::slice(1) |>
       dplyr::mutate(TIME = 0) |>
       dplyr::ungroup()
   }
   
   ## Observations
-  samples <- data %>%
+  samples <- data |>
     dplyr::select(
       ORIGID = dictionary$subject_id, 
       GROUP = dictionary$group, 
       TIME = dictionary$time, 
       DV = dictionary$conc,
       !!covariates
-    ) %>%
-    dplyr::mutate(AMT = 0, EVID = 0, MDV = 0, CMT = obs_compartment) %>%
-    dplyr::mutate(DV = as.numeric(ifelse(stringr::str_detect(tolower(DV), "[<a-z]"), -99, DV))) %>%
-    dplyr::left_join(ids)
+    ) |>
+    dplyr::mutate(AMT = 0, EVID = 0, MDV = 0, CMT = obs_compartment) |>
+    dplyr::mutate(DV = as.numeric(ifelse(
+      stringr::str_detect(tolower(.data$DV), "[<a-z]"), -99, .data$DV
+    ))) |>
+    dplyr::left_join(ids, by = dplyr::join_by("ORIGID"))
   
   ## Combine
   comb <- dplyr::bind_rows(
     doses,
     samples
-  ) %>%
-    dplyr::mutate(ifelse(is.null(.data$GROUP), 1, .data$GROUP)) %>%
-    dplyr::arrange(!!dictionary$subject_id, !!dictionary$group, !!dictionary$time, EVID) %>%
-    dplyr::select(ID, TIME, CMT, EVID, MDV, DV, AMT, GROUP, ORIGID, !!covariates) %>%
-    dplyr::arrange(GROUP, ID, TIME, -EVID)
+  ) |>
+    dplyr::mutate(ifelse(is.null(.data$GROUP), 1, .data$GROUP)) |>
+    dplyr::arrange(!!dictionary$subject_id, !!dictionary$group, !!dictionary$time, .data$EVID) |>
+    dplyr::select("ID", "TIME", "CMT", "EVID", "MDV", "DV", "AMT", "GROUP", "ORIGID", !!covariates) |>
+    dplyr::arrange(.data$GROUP, .data$ID, .data$TIME, -.data$EVID)
   
   ## Convert all character columns to categorical (but numeric)
   for(key in names(comb)) {
@@ -91,9 +99,7 @@ reformat_data_nca_to_modeling <- function(
   }
   
   ## Remove any observations with DV = -99
-  comb <- comb |>
-    dplyr::filter(DV != -99)
-  
+  comb <- dplyr::filter(comb, .data$DV != -99)
   
   ## Return
   comb

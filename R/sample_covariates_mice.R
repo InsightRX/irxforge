@@ -23,13 +23,13 @@
 #' @export
 #'
 sample_covariates_mice <- function(
-    data,
-    cat_covs = NULL,
-    conditional = NULL,
-    n_subjects = nrow(data),
-    cont_method = "pmm",
-    iterations = 1,
-    ...
+  data,
+  cat_covs = NULL,
+  conditional = NULL,
+  n_subjects = nrow(data),
+  cont_method = "pmm",
+  iterations = 1,
+  ...
 ) {
 
   # names of continuous covariates
@@ -39,26 +39,33 @@ sample_covariates_mice <- function(
   # impute missing data once with mice
   if(length(miss_vars) > 0) {
     data_f <- data |> # create copy of the original data set with factor version of categorical covariates
+      # TODO: mutate_at() is superseded by across()
       dplyr::mutate_at(cat_covs, function(x) as.factor(x))
-    imp1 <- mice::mice(
+    imp1 <- suppressWarnings(mice::mice( # Suppress "Number of logged events"
       data_f,
       m = 1,
       printFlag = FALSE,
       maxit = 15
-    )
+    ))
     data <- mice::complete(imp1)
   }
   mi_data <- data[1:n_subjects, ] |>
+    # TODO: mutate_all() is superseded by across()
     dplyr::mutate_all(function(x) NA)
 
   if(!is.null(conditional)) {
     seed_covs <- names(conditional)
     pool_seed <- data
     for(key in seed_covs) {
-      pool_seed <- pool_seed |>
-        dplyr::filter(.data[[key]] >= min(conditional[[key]]) & .data[[key]] <= max(conditional[[key]])) 
+      pool_seed <- dplyr::filter(
+        pool_seed,
+        .data[[key]] >= min(conditional[[key]]) & 
+        .data[[key]] <= max(conditional[[key]])
+      ) 
     }
-    mi_data[seed_covs] <- pool_seed[sample(1:nrow(pool_seed), n_subjects, replace = T), seed_covs]
+    mi_data[seed_covs] <- pool_seed[
+      sample(1:nrow(pool_seed), n_subjects, replace = T), seed_covs
+    ]
   }
 
   comb <- data |>
@@ -67,6 +74,7 @@ sample_covariates_mice <- function(
       mi_data |>
         dplyr::mutate(Type = "Simulated")
     ) |>
+    # TODO: mutate_at() is superseded by across()
     dplyr::mutate_at(cat_covs, function(x) as.factor(x))
 
   pred <- mice::make.predictorMatrix(comb)
@@ -87,9 +95,11 @@ sample_covariates_mice <- function(
   )
 
   ## Refactor and return
-  imp_data |>
-    mice::complete(action = "long") |>
-    dplyr::filter(Type == "Simulated") |>
-    dplyr::select(-.id, -Type, -.imp)
-
+  out <- imp_data |>
+    tidyr::complete(action = "long") |>
+    dplyr::filter(.data$Type == "Simulated") |>
+    dplyr::select(-".id", -"Type", -".imp")
+  if (tibble::is_tibble(data)) out <- tibble::as_tibble(out)
+  out
+  
 }

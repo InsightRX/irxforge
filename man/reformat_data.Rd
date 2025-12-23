@@ -2,7 +2,7 @@
 % Please edit documentation in R/reformat_data.R
 \name{reformat_data}
 \alias{reformat_data}
-\title{Reformat data between various dataset layouts}
+\title{Reformat data between various data set layouts}
 \usage{
 reformat_data(
   data,
@@ -13,35 +13,44 @@ reformat_data(
 )
 }
 \arguments{
-\item{data}{dataset or list of datasets}
+\item{data}{A data set or list of data sets.}
 
-\item{dictionary}{a data dictionary that maps expected variable names to
+\item{dictionary}{A data dictionary that maps expected variable names to
 variables in the data.}
 
-\item{input_type}{type of input dataset. Can be one of \code{nca}, \code{modeling}, or
-\code{sdtm}. The types are defined as follows:
+\item{input_type}{The type of input data set, defined as follows:
 \itemize{
-\item \code{nca}: a dataset with one row for every observed concentration measurement.
-Time, concentration value, and administered dose are required columns.
-The dataset may contain any other variables, covariates, groupings etc in
+\item \code{"nca"}: a data set with one row for every observed concentration measurement.
+Time, concentration value, and administered dose are required columns. The
+data set may contain any other variables, covariates, groupings etc in
 columns.
-\item \code{modeling}: a dataset with dose events (evid = 1), concentrations (evid =
+\item \code{"modeling"}: a data set with dose events (evid = 1), concentrations (evid =
 0), and potentially other events (events = 2) in separate rows. Dataset
 requires columns for event type, time, dose amount, measured concentration.
 The dataset may contain any other variables, covariates, groupings etc in
 columns.
-\item \code{sdtm}: a list of various datasets or "domains", such as \code{ADSL} \code{DM}, \code{EX}, and
+\item \code{"sdtm"}: a list of various data sets or "domains", such as \code{ADSL} \code{DM}, \code{EX}, and
 \code{DS},  following the SDTM structure and nomenclature.
 }}
 
-\item{output_type}{type of output dataset. Can be either \code{nca} or \code{modeling}.}
+\item{output_type}{type of output dataset. Can be either \code{"nca"} or
+\code{"modeling"}.}
 
 \item{...}{passed onto specific reformatting functions:
-\code{reformat_data_nca_to_modeling}, ``}
+\itemize{
+\item \code{input_type = "nca"} and \code{output_type = "modeling"}:
+\code{\link[=reformat_data_nca_to_modeling]{reformat_data_nca_to_modeling()}}
+\item \code{input_type = "sdtm"} and \code{output_type = "modeling"}:
+\code{\link[=reformat_data_sdtm_to_modeling]{reformat_data_sdtm_to_modeling()}}
+\item \code{input_type = "modeling"} and \code{output_type = "modeling"}:
+\code{\link[=reformat_data_modeling_to_modeling]{reformat_data_modeling_to_modeling()}}
+\item \code{input_type = "modeling"} and \code{output_type = "nca"}:
+\code{\link[=reformat_data_modeling_to_nca]{reformat_data_modeling_to_nca()}}
+}}
 }
 \value{
-a data.frame in either \code{nca} or \code{modeling} format
+A data.frame in the format specified by \code{output_type}.
 }
 \description{
-Reformat data between various dataset layouts
+Reformat data between various data set layouts
 }
