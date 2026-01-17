@@ -12,7 +12,8 @@
 #' `list("WT" = c(40, 60), "BMI" = c(15, 25))`.
 #' @param cont_method method used to predict continuous covariates within mice,
 #' default is `pmm`.
-#' @param iterations number of MICE iterations. Default is 1.
+#' @param replicates number of multiple imputations replicates to sample. 
+#' Default is 1.
 #' @param ... additional arguments passed to `mice::mice()` function
 #'
 #' @returns data.frame with the simulated covariates, with n_subjects * m
@@ -28,7 +29,7 @@ sample_covariates_mice <- function(
   conditional = NULL,
   n_subjects = nrow(data),
   cont_method = "pmm",
-  iterations = 1,
+  replicates = 1,
   ...
 ) {
 
@@ -86,7 +87,7 @@ sample_covariates_mice <- function(
   suppressWarnings( ## mice throws warning about partial matching that (in R 4+)
     imp_data <- mice::mice(
       comb,
-      m = 1,
+      m = replicates,
       printFlag = FALSE,
       predictorMatrix = pred,
       method = method,

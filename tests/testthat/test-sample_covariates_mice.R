@@ -89,3 +89,16 @@ test_that("conditional argument works with multiple variables", {
   expect_true(all(out$AGE >= 25 & out$AGE <= 35))
   expect_true(all(out$WT >= 50 & out$WT <= 80))
 })
+
+test_that("input class is preserved", {
+  dat <- data.frame(
+    AGE = c(20, 30, 40, 50), WT  = c(55, 70, 65, 80), SEX = c("M", "F", "F", "M")
+  )
+  out_dat <- sample_covariates_mice(
+    data = dat,
+    cat_covs = "SEX",
+    replicates = 5
+  )
+  expect_s3_class(out_dat, "data.frame")
+  expect_equal(nrow(out_dat), nrow(dat) * 5)
+})

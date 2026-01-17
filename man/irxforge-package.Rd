@@ -7,6 +7,13 @@
 \description{
 Functions for parsing, converting, and generating data for pharmacometric analyses.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://insightrx.github.io/irxforge/}
+}
+
+}
 \author{
 \strong{Maintainer}: Ron Keizer \email{ron@insight-rx.com}
 

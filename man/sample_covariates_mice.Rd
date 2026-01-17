@@ -11,7 +11,7 @@ sample_covariates_mice(
   conditional = NULL,
   n_subjects = nrow(data),
   cont_method = "pmm",
-  iterations = 1,
+  replicates = 1,
   ...
 )
 }
@@ -32,7 +32,8 @@ subjects in the data.}
 \item{cont_method}{method used to predict continuous covariates within mice,
 default is \code{pmm}.}
 
-\item{iterations}{number of MICE iterations. Default is 1.}
+\item{replicates}{number of multiple imputations replicates to sample.
+Default is 1.}
 
 \item{...}{additional arguments passed to \code{mice::mice()} function}
 }
