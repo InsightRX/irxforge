@@ -16,13 +16,12 @@
 #' Default is 1.
 #' @param ... additional arguments passed to `mice::mice()` function
 #'
+#' @details missing values in `data` must be coded as NA
+#'
 #' @returns data.frame with the simulated covariates, with n_subjects * m
 #' rows and p columns
 #'
-#' @details missing values in `data` must be coded as NA
-#'
 #' @export
-#'
 sample_covariates_mice <- function(
   data,
   cat_covs = NULL,

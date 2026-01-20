@@ -31,7 +31,6 @@
 #' A data.frame in the format specified by `output_type`.
 #' 
 #' @export
-#' 
 reformat_data <- function(
   data,
   dictionary = NULL,
@@ -102,4 +101,3 @@ detect_dataset_type <- function(data) {
     return("nca")
   }
 }
-

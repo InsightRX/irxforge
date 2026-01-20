@@ -6,7 +6,6 @@
 #' rows and `p` columns
 #'
 #' @export
-#'
 sample_covariates_bootstrap <- function(
   data,
   n_subjects = nrow(data),

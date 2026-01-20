@@ -1,8 +1,5 @@
 #' Reformat NCA-type analysis-ready dataset (ARD) into a NONMEM-style modeling 
 #' dataset
-#'
-#' @returns data.frame with population PK input data in NONMEM-style
-#' format.
 #' 
 #' @param data dataset formatted as NCA analysis-ready dataset
 #' @param dictionary a data dictionary that maps expected variable names to 
@@ -12,8 +9,10 @@
 #' @param covariates a vector of covariate names that are to be extracted
 #' and added to the modeling dataset.
 #'
-#' @export
+#' @returns data.frame with population PK input data in NONMEM-style
+#' format.
 #' 
+#' @export
 reformat_data_nca_to_modeling <- function(
   data, 
   dictionary = list(

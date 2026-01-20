@@ -9,7 +9,6 @@
 #' @returns route (character), either "iv", "oral", "sc", or "im"
 #' 
 #' @export
-#' 
 get_route_from_data_column <- function(x) {
   x <- x[!is.na(x)]
   if(length(unique(x)) > 1) {

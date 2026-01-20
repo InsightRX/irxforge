@@ -1,16 +1,15 @@
 #' Reformat SDTM datasets into NONMEM-style modeling dataset
+#' 
+#' @param data list containing data.frames with SDTM domains
+#' @param dictionary a data dictionary that maps expected variable names to 
+#' variables in the data.
 #'
 #' @returns data.frame with population PK input data in NONMEM-style
 #' format. It will also add the non-standard columns ROUTE ("oral", "iv") and 
 #' FORM (formulation: "tablet", "suspension", "patch", "infusion", etc.) with 
 #' values for each dose and NA for observations.
 #' 
-#' @param data list containing data.frames with SDTM domains
-#' @param dictionary a data dictionary that maps expected variable names to 
-#' variables in the data.
-#'
 #' @export
-#' 
 reformat_data_sdtm_to_modeling <- function(
   data, 
   dictionary

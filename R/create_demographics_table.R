@@ -10,6 +10,9 @@
 #' `"ACTARM"`
 #' @param path optional, path to filename to save output table to.
 #' 
+#' @returns 
+#' A data.frame or tibble.
+#' 
 #' @export
 create_demographics_table <- function(
   data,

@@ -10,7 +10,6 @@
 #' @returns a vector of approximate nominal timepoints estimated from the data
 #' 
 #' @export
-#' 
 get_nominal_timepoints <- function(
   t, 
   adjust = 0.5,
