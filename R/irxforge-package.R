@@ -1,3 +1,6 @@
+#' @keywords internal
+"_PACKAGE"
+
 #' irxforge package
 #'
 #' Package for generating, parsing, and converting pharmacometric data

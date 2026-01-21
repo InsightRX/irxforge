@@ -25,6 +25,9 @@ categorical.}
 
 \item{path}{optional, path to filename to save output table to.}
 }
+\value{
+A data.frame or tibble.
+}
 \description{
 Create a standardized table for demographics information
 }

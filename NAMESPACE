@@ -2,8 +2,6 @@
 
 export(add_nominal_timepoints)
 export(create_demographics_table)
-export(get_data_for_modelfit)
-export(get_data_for_nca)
 export(get_nominal_timepoints)
 export(get_route_from_data_column)
 export(reformat_data)
