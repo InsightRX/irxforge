@@ -74,3 +74,42 @@ test_that("dose records are reduced to one per subject when dose is column-wise"
   expect_equal(sum(out$EVID == 1), 1) # Only one dose record per subject at t = 0
   expect_equal(out$TIME[out$EVID == 1], 0)
 })
+
+test_that("reformat_data_nca_to_modeling handles multiple doses per subject", {
+  # Create data with multiple dose events per subject (row-wise dosing)
+  dat <- data.frame(
+    USUBJID = c(1, 1, 1, 1, 1, 1,
+                2, 2, 2, 2, 2, 2),
+    PCTPTNUM = c(0, 1, 2, 24, 25, 26,
+                 0, 1, 2, 24, 25, 26),
+    PCORRES = c(0, 10, 5, 0, 12, 6,
+                0, 15, 8, 0, 18, 9),
+    EXDOSE = c(100, NA, NA, 100, NA, NA,
+               200, NA, NA, 200, NA, NA)
+  )
+
+  dictionary <- list(
+    subject_id = "USUBJID",
+    conc = "PCORRES",
+    time = "PCTPTNUM",
+    dose = "EXDOSE"
+  )
+
+  result <- reformat_data_nca_to_modeling(
+    data = dat,
+    dictionary = dictionary
+  )
+
+  dose_rows <- result[result$EVID == 1, ]
+
+  # Should have 4 dose events total (2 per subject)
+  expect_equal(nrow(dose_rows), 4)
+
+  # Check dose times are preserved
+  expect_true(all(c(0, 24) %in% dose_rows$TIME[dose_rows$ID == 1]))
+  expect_true(all(c(0, 24) %in% dose_rows$TIME[dose_rows$ID == 2]))
+
+  # Check dose amounts
+  expect_equal(sum(dose_rows$AMT[dose_rows$ID == 1]), 200)
+  expect_equal(sum(dose_rows$AMT[dose_rows$ID == 2]), 400)
+})

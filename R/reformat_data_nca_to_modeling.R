@@ -53,6 +53,7 @@ reformat_data_nca_to_modeling <- function(
       AMT = !!dictionary$dose,
       !!covariates
     ) |>
+    dplyr::filter(!is.na(AMT)) |>
     dplyr::mutate(EVID = 1, MDV = 1, DV = 0, CMT = dose_compartment) |>
     dplyr::left_join(ids, by = dplyr::join_by("ORIGID"))
   if(nrow(doses) == nrow(data)) { # Dose is given as a column, and not row-wise using EVID
