@@ -58,7 +58,7 @@ reformat_data_nca_to_modeling <- function(
     dplyr::left_join(ids, by = dplyr::join_by("ORIGID"))
   if(nrow(doses) == nrow(data)) { # Dose is given as a column, and not row-wise using EVID
     doses <- doses |>
-      dplyr::group_by("ORIGID", "GROUP") |>
+      dplyr::group_by(.data$ORIGID, .data$GROUP) |>
       dplyr::slice(1) |>
       dplyr::mutate(TIME = 0) |>
       dplyr::ungroup()
