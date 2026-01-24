@@ -18,7 +18,7 @@ pak::pak("InsightRX/irxforge")
 See at
 [`https://insightrx.github.io/irxforge/`](https://insightrx.github.io/irxforge/reference/index.html)
 and also in the installed package:
-[`help(package = "irxforge")`](https://rdrr.io/pkg/irxforge/man).
+[`help(package = "irxforge")`](https://insightrx.github.io/irxforge/reference).
 
 ## License
 
