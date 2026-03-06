@@ -156,3 +156,96 @@ test_that("nhanes method is dispatched from sample_covariates()", {
   )
   expect_equal(sample_covariates(method = "nhanes"), "success")
 })
+
+# --- cache_dir / download_nhanes_cache() tests ---
+
+test_that("sample_covariates_nhanes loads from cache_dir RDS files", {
+  tmp <- withr::local_tempdir()
+  saveRDS(mock_demo, file.path(tmp, "DEMO_J.rds"))
+  saveRDS(mock_bmx,  file.path(tmp, "BMX_J.rds"))
+  out <- sample_covariates_nhanes(
+    tables = c("DEMO", "BMX"),
+    year = "2017-2018",
+    cache_dir = tmp,
+    n_subjects = 10
+  )
+  expect_s3_class(out, "data.frame")
+  expect_equal(nrow(out), 10)
+  expect_false("SEQN" %in% names(out))
+})
+
+test_that("sample_covariates_nhanes errors when cached file is missing", {
+  tmp <- withr::local_tempdir()
+  saveRDS(mock_demo, file.path(tmp, "DEMO_J.rds"))
+  # BMX_J.rds intentionally absent
+  expect_error(
+    sample_covariates_nhanes(
+      tables = c("DEMO", "BMX"),
+      year = "2017-2018",
+      cache_dir = tmp,
+      n_subjects = 5
+    ),
+    "Cached file not found"
+  )
+})
+
+test_that("download_nhanes_cache saves RDS files with correct names", {
+  tmp <- withr::local_tempdir()
+  local_mocked_bindings(
+    nhanes = function(table) if (grepl("DEMO", table)) mock_demo else mock_bmx,
+    .package = "nhanesA"
+  )
+  download_nhanes_cache(tables = c("DEMO", "BMX"), years = "2017-2018", path = tmp)
+  expect_true(file.exists(file.path(tmp, "DEMO_J.rds")))
+  expect_true(file.exists(file.path(tmp, "BMX_J.rds")))
+  expect_equal(readRDS(file.path(tmp, "DEMO_J.rds")), mock_demo)
+})
+
+test_that("download_nhanes_cache skips existing files when overwrite = FALSE", {
+  tmp <- withr::local_tempdir()
+  saveRDS(mock_demo, file.path(tmp, "DEMO_J.rds"))
+  call_count <- 0L
+  local_mocked_bindings(
+    nhanes = function(table) { call_count <<- call_count + 1L; mock_demo },
+    .package = "nhanesA"
+  )
+  download_nhanes_cache(tables = "DEMO", years = "2017-2018", path = tmp, overwrite = FALSE)
+  expect_equal(call_count, 0L)
+})
+
+test_that("download_nhanes_cache overwrites when overwrite = TRUE", {
+  tmp <- withr::local_tempdir()
+  saveRDS(mock_demo, file.path(tmp, "DEMO_J.rds"))
+  call_count <- 0L
+  local_mocked_bindings(
+    nhanes = function(table) { call_count <<- call_count + 1L; mock_demo },
+    .package = "nhanesA"
+  )
+  download_nhanes_cache(tables = "DEMO", years = "2017-2018", path = tmp, overwrite = TRUE)
+  expect_equal(call_count, 1L)
+})
+
+test_that("download_nhanes_cache handles multiple years", {
+  tmp <- withr::local_tempdir()
+  local_mocked_bindings(
+    nhanes = function(table) mock_demo,
+    .package = "nhanesA"
+  )
+  download_nhanes_cache(
+    tables = "DEMO",
+    years = c("2015-2016", "2017-2018"),
+    path = tmp
+  )
+  expect_true(file.exists(file.path(tmp, "DEMO_I.rds")))
+  expect_true(file.exists(file.path(tmp, "DEMO_J.rds")))
+})
+
+test_that("download_nhanes_cache returns path invisibly", {
+  tmp <- withr::local_tempdir()
+  local_mocked_bindings(
+    nhanes = function(table) mock_demo,
+    .package = "nhanesA"
+  )
+  result <- download_nhanes_cache(tables = "DEMO", years = "2017-2018", path = tmp)
+  expect_equal(result, tmp)
+})

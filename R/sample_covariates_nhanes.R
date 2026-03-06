@@ -21,6 +21,10 @@
 #'   non-institutionalized population. Requires `WTMEC2YR` to be present in
 #'   the downloaded data (i.e., `"DEMO"` must be included in `tables`).
 #'   Default is `FALSE` (simple random sampling with replacement).
+#' @param cache_dir path to a directory of pre-downloaded RDS files created by
+#'   [download_nhanes_cache()]. When provided, tables are loaded from local
+#'   files instead of being downloaded, so no internet connection or `nhanesA`
+#'   package is needed. Default `NULL` downloads tables on demand.
 #' @param ... additional arguments (currently unused)
 #'
 #' @details
@@ -43,22 +47,15 @@ sample_covariates_nhanes <- function(
   n_subjects = 100,
   conditional = NULL,
   use_weights = FALSE,
+  cache_dir = NULL,
   ...
 ) {
-  if (!requireNamespace("nhanesA", quietly = TRUE)) {
-    stop(
-      "Package 'nhanesA' is required for NHANES sampling. ",
-      "Install it with: install.packages('nhanesA')",
-      call. = FALSE
-    )
-  }
-
   year_suffix <- nhanes_year_suffix(year)
 
-  # Download and merge tables on SEQN
+  # Load each table from local cache or download via nhanesA
   data <- NULL
   for (table in tables) {
-    tbl_data <- nhanesA::nhanes(paste0(table, year_suffix))
+    tbl_data <- nhanes_load_table(table, year_suffix, cache_dir)
     if (is.null(data)) {
       data <- tbl_data
     } else {
@@ -120,6 +117,30 @@ sample_covariates_nhanes <- function(
   }
 
   data
+}
+
+#' Load a single NHANES table from cache or download it
+#' @noRd
+nhanes_load_table <- function(table, suffix, cache_dir) {
+  if (!is.null(cache_dir)) {
+    file_path <- file.path(cache_dir, paste0(table, suffix, ".rds"))
+    if (!file.exists(file_path)) {
+      stop(
+        "Cached file not found: ", file_path, ". ",
+        "Run download_nhanes_cache() first, or set cache_dir = NULL to download on demand.",
+        call. = FALSE
+      )
+    }
+    return(readRDS(file_path))
+  }
+  if (!requireNamespace("nhanesA", quietly = TRUE)) {
+    stop(
+      "Package 'nhanesA' is required for NHANES sampling. ",
+      "Install it with: install.packages('nhanesA')",
+      call. = FALSE
+    )
+  }
+  nhanesA::nhanes(paste0(table, suffix))
 }
 
 #' Map NHANES survey year to table name suffix
