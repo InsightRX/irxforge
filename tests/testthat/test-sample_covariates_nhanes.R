@@ -10,9 +10,9 @@ mock_nhanes <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Helper: write mock_nhanes RDS into a temp dir
+# Helper: write mock_nhanes RDS into a temp dir scoped to the caller's test
 nhanes_temp_cache <- function(year = "2017-2018") {
-  tmp <- withr::local_tempdir()
+  tmp <- withr::local_tempdir(.local_envir = parent.frame())
   saveRDS(mock_nhanes, file.path(tmp, paste0("nhanes_", year, ".rds")))
   tmp
 }
@@ -236,10 +236,10 @@ test_that("skips tables with duplicate SEQNs", {
     nhanes       = function(table) dup_tbl,
     .package     = "nhanesA"
   )
-  # Should not error; warns and skips; no output file if nothing merged
+  # Should not error; emits a warning that nothing was saved
   expect_warning(
     download_nhanes_cache(groups = "DEMO", years = "2017-2018", path = tmp),
-    regexp = NA  # no warning expected — it just messages and skips
+    "No tables downloaded"
   )
 })
 
@@ -298,8 +298,8 @@ test_that("returns path invisibly", {
 
 test_that(".onLoad downloads merged cache when absent", {
   tmp <- withr::local_tempdir()
+  local_mocked_bindings(nhanes_default_cache_dir = function() tmp)
   local_mocked_bindings(
-    nhanes_default_cache_dir = function() tmp,
     nhanesTables = function(group, year) mock_tables_df(paste0(group, "_J")),
     nhanes       = function(table) mock_nhanes,
     .package     = "nhanesA"
@@ -312,12 +312,12 @@ test_that(".onLoad skips download when cache already exists", {
   tmp <- withr::local_tempdir()
   saveRDS(mock_nhanes, file.path(tmp, "nhanes_2017-2018.rds"))
   call_count <- 0L
+  local_mocked_bindings(nhanes_default_cache_dir = function() tmp)
   local_mocked_bindings(
-    nhanes_default_cache_dir = function() tmp,
     nhanesTables = function(group, year) { call_count <<- call_count + 1L
                                            mock_tables_df("DEMO_J") },
-    nhanes = function(table) mock_nhanes,
-    .package = "nhanesA"
+    nhanes       = function(table) mock_nhanes,
+    .package     = "nhanesA"
   )
   irxforge:::.onLoad(NULL, "irxforge")
   expect_equal(call_count, 0L)
