@@ -174,19 +174,22 @@ test_that("sample_covariates_nhanes loads from cache_dir RDS files", {
   expect_false("SEQN" %in% names(out))
 })
 
-test_that("sample_covariates_nhanes errors when cached file is missing", {
+test_that("sample_covariates_nhanes falls back to nhanesA on cache miss", {
   tmp <- withr::local_tempdir()
   saveRDS(mock_demo, file.path(tmp, "DEMO_J.rds"))
-  # BMX_J.rds intentionally absent
-  expect_error(
-    sample_covariates_nhanes(
-      tables = c("DEMO", "BMX"),
-      year = "2017-2018",
-      cache_dir = tmp,
-      n_subjects = 5
-    ),
-    "Cached file not found"
+  # BMX_J.rds intentionally absent — should trigger nhanesA fallback
+  local_mocked_bindings(
+    nhanes = function(table) mock_bmx,
+    .package = "nhanesA"
   )
+  out <- sample_covariates_nhanes(
+    tables = c("DEMO", "BMX"),
+    year = "2017-2018",
+    cache_dir = tmp,
+    n_subjects = 5
+  )
+  expect_s3_class(out, "data.frame")
+  expect_equal(nrow(out), 5)
 })
 
 test_that("download_nhanes_cache saves RDS files with correct names", {
@@ -248,4 +251,30 @@ test_that("download_nhanes_cache returns path invisibly", {
   )
   result <- download_nhanes_cache(tables = "DEMO", years = "2017-2018", path = tmp)
   expect_equal(result, tmp)
+})
+
+test_that(".onLoad downloads default tables when cache is absent", {
+  tmp <- withr::local_tempdir()
+  local_mocked_bindings(
+    nhanes_default_cache_dir = function() tmp,
+    nhanes = function(table) if (grepl("DEMO", table)) mock_demo else mock_bmx,
+    .package = "nhanesA"
+  )
+  # Simulate onLoad
+  irxforge:::.onLoad(NULL, "irxforge")
+  expect_true(file.exists(file.path(tmp, "DEMO_J.rds")))
+  expect_true(file.exists(file.path(tmp, "BMX_J.rds")))
+})
+
+test_that(".onLoad skips download when cache already exists", {
+  tmp <- withr::local_tempdir()
+  saveRDS(mock_demo, file.path(tmp, "DEMO_J.rds"))
+  call_count <- 0L
+  local_mocked_bindings(
+    nhanes_default_cache_dir = function() tmp,
+    nhanes = function(table) { call_count <<- call_count + 1L; mock_demo },
+    .package = "nhanesA"
+  )
+  irxforge:::.onLoad(NULL, "irxforge")
+  expect_equal(call_count, 0L)
 })

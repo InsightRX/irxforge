@@ -22,14 +22,23 @@
 #'   the downloaded data (i.e., `"DEMO"` must be included in `tables`).
 #'   Default is `FALSE` (simple random sampling with replacement).
 #' @param cache_dir path to a directory of pre-downloaded RDS files created by
-#'   [download_nhanes_cache()]. When provided, tables are loaded from local
-#'   files instead of being downloaded, so no internet connection or `nhanesA`
-#'   package is needed. Default `NULL` downloads tables on demand.
+#'   [download_nhanes_cache()]. Defaults to the package-level NHANES cache
+#'   populated automatically on first load (see Details). Set to `NULL` to
+#'   always download via `nhanesA` regardless of the cache.
 #' @param ... additional arguments (currently unused)
 #'
 #' @details
-#' Requires the `nhanesA` package. Data is downloaded from the CDC NHANES
-#' website and cached locally by `nhanesA`.
+#' On first load, `irxforge` automatically downloads a default set of NHANES
+#' tables (`DEMO` and `BMX`, cycle 2017-2018) into a cache inside the package
+#' installation directory. Subsequent calls to `sample_covariates_nhanes()`
+#' read from this cache with no internet access required.
+#'
+#' Call [download_nhanes_cache()] directly to pre-download additional tables or
+#' survey years into the same (or a different) cache directory.
+#'
+#' If a requested table is not found in `cache_dir`, the function falls back to
+#' downloading it via `nhanesA`. If `nhanesA` is also unavailable, an error is
+#' raised.
 #'
 #' NHANES uses a complex multi-stage sampling design. Survey weights reflect
 #' the probability of selection and non-response. Use `use_weights = TRUE` to
@@ -47,7 +56,7 @@ sample_covariates_nhanes <- function(
   n_subjects = 100,
   conditional = NULL,
   use_weights = FALSE,
-  cache_dir = NULL,
+  cache_dir = nhanes_default_cache_dir(),
   ...
 ) {
   year_suffix <- nhanes_year_suffix(year)
@@ -119,24 +128,29 @@ sample_covariates_nhanes <- function(
   data
 }
 
-#' Load a single NHANES table from cache or download it
+#' Default cache directory inside the package installation folder
+#' @noRd
+nhanes_default_cache_dir <- function() {
+  file.path(system.file(package = "irxforge"), "nhanes_cache")
+}
+
+#' Load a single NHANES table: cache first, then nhanesA fallback
 #' @noRd
 nhanes_load_table <- function(table, suffix, cache_dir) {
   if (!is.null(cache_dir)) {
     file_path <- file.path(cache_dir, paste0(table, suffix, ".rds"))
-    if (!file.exists(file_path)) {
-      stop(
-        "Cached file not found: ", file_path, ". ",
-        "Run download_nhanes_cache() first, or set cache_dir = NULL to download on demand.",
-        call. = FALSE
-      )
+    if (file.exists(file_path)) {
+      return(readRDS(file_path))
     }
-    return(readRDS(file_path))
+    message(
+      "NHANES cache miss for ", basename(file_path),
+      "; falling back to nhanesA download."
+    )
   }
   if (!requireNamespace("nhanesA", quietly = TRUE)) {
     stop(
-      "Package 'nhanesA' is required for NHANES sampling. ",
-      "Install it with: install.packages('nhanesA')",
+      "Cached file not found and 'nhanesA' is not installed. ",
+      "Run download_nhanes_cache() to populate the cache, or install nhanesA.",
       call. = FALSE
     )
   }
