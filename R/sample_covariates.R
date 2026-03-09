@@ -2,7 +2,8 @@
 #'
 #' @param method sampling method, one of `mvtnorm`, `bootstrap`, `mice`, or
 #' `nhanes`. E.g. `list(AGE = c(60, 80), WT = c(70, 100))`.
-#'
+#' @param seed integer random seed passed to [set.seed()] for reproducibility.
+#' Default `NULL` does not set a seed.
 #' @param ... arguments passed to lower-level function(s).
 #'
 #' @returns data.frame with covariates in each column
@@ -10,8 +11,9 @@
 #' @export
 sample_covariates <- function(
   method = c("mvtnorm", "mice", "bootstrap", "nhanes"),
+  seed = NULL,
   ...
 ) {
   method <- rlang::arg_match(method)
-  do.call(paste0("sample_covariates_", method), args = list(...))
+  do.call(paste0("sample_covariates_", method), args = list(seed = seed, ...))
 }

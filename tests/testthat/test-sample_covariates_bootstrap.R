@@ -61,3 +61,17 @@ test_that("returns error when filtered data is empty", {
     "No observations present"
   )
 })
+
+test_that("seed produces reproducible output", {
+  dat <- data.frame(x = rnorm(100))
+  out1 <- sample_covariates_bootstrap(dat, n_subjects = 20, seed = 1)
+  out2 <- sample_covariates_bootstrap(dat, n_subjects = 20, seed = 1)
+  expect_equal(out1, out2)
+})
+
+test_that("different seeds produce different output", {
+  dat <- data.frame(x = rnorm(100))
+  out1 <- sample_covariates_bootstrap(dat, n_subjects = 20, seed = 1)
+  out2 <- sample_covariates_bootstrap(dat, n_subjects = 20, seed = 2)
+  expect_false(identical(out1, out2))
+})

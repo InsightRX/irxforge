@@ -9,6 +9,8 @@
 #' subjects in the data.
 #' @param exponential sample from exponential distribution? Default `FALSE`.
 #' @param conditional description...
+#' @param seed integer random seed passed to [set.seed()] for reproducibility.
+#' Default `NULL` does not set a seed.
 #' @param ... additional arguments passed to `mvrnorm()` function
 #'
 #' @returns a data.frame with the simulated covariates, with `n_subjects`
@@ -23,9 +25,11 @@ sample_covariates_mvtnorm <- function(
   n_subjects = nrow(data),
   exponential = FALSE,
   conditional = NULL,
+  seed = NULL,
   ...
 ) {
-  
+  if (!is.null(seed)) set.seed(seed)
+
   if(!is.null(conditional)) {
     for(key in names(conditional)) {
       data <- dplyr::filter(

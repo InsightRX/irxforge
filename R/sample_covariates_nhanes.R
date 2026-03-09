@@ -17,6 +17,8 @@
 #'   produces a sample more representative of the U.S. civilian
 #'   non-institutionalized population. Requires `WTMEC2YR` to be present in
 #'   the cached data (included when `"DEMO"` was downloaded). Default `FALSE`.
+#' @param seed integer random seed passed to [set.seed()] for reproducibility.
+#'   Default `NULL` does not set a seed.
 #' @param dictionary named list mapping user-defined covariate names to their
 #'   NHANES variable names, e.g.
 #'   `list("WT" = "BMXWT", "HT" = "BMXHT", "AGE" = "RIDAGEYR")`.
@@ -198,10 +200,13 @@ sample_covariates_nhanes <- function(
   n_subjects  = 100,
   conditional = NULL,
   use_weights = FALSE,
+  seed        = NULL,
   dictionary  = NULL,
   cache_dir   = nhanes_default_cache_dir(),
   ...
 ) {
+  if (!is.null(seed)) set.seed(seed)
+
   data <- nhanes_load_merged(year, cache_dir)
 
   # Translate user names → NHANES names via dictionary

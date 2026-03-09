@@ -192,6 +192,20 @@ test_that("nhanes method is dispatched from sample_covariates()", {
   expect_equal(sample_covariates(method = "nhanes"), "success")
 })
 
+test_that("seed produces reproducible output", {
+  tmp <- nhanes_temp_cache()
+  out1 <- sample_covariates_nhanes(n_subjects = 10, seed = 1, cache_dir = tmp)
+  out2 <- sample_covariates_nhanes(n_subjects = 10, seed = 1, cache_dir = tmp)
+  expect_equal(out1, out2)
+})
+
+test_that("different seeds produce different output", {
+  tmp <- nhanes_temp_cache()
+  out1 <- sample_covariates_nhanes(n_subjects = 10, seed = 1, cache_dir = tmp)
+  out2 <- sample_covariates_nhanes(n_subjects = 10, seed = 2, cache_dir = tmp)
+  expect_false(identical(out1, out2))
+})
+
 # ---- download_nhanes_cache() ----
 
 # Mock nhanesTables returns a 1-row data frame, nhanes returns mock data
