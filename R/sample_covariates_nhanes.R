@@ -17,6 +17,13 @@
 #'   produces a sample more representative of the U.S. civilian
 #'   non-institutionalized population. Requires `WTMEC2YR` to be present in
 #'   the cached data (included when `"DEMO"` was downloaded). Default `FALSE`.
+#' @param dictionary named list mapping user-defined covariate names to their
+#'   NHANES variable names, e.g.
+#'   `list("WT" = "BMXWT", "HT" = "BMXHT", "AGE" = "RIDAGEYR")`.
+#'   Names in `covariates` and `conditional` that appear as keys in
+#'   `dictionary` are translated to the corresponding NHANES names before
+#'   lookup and translated back in the output. Names not present in
+#'   `dictionary` are treated as direct NHANES variable names.
 #' @param cache_dir path to a directory containing a merged NHANES RDS file
 #'   created by [download_nhanes_cache()]. Defaults to the package-level cache
 #'   populated automatically on first load. Set to `NULL` to always download
@@ -186,18 +193,23 @@
 #'
 #' @export
 sample_covariates_nhanes <- function(
-  covariates = NULL,
-  year       = "2017-2018",
-  n_subjects = 100,
+  covariates  = NULL,
+  year        = "2017-2018",
+  n_subjects  = 100,
   conditional = NULL,
   use_weights = FALSE,
+  dictionary  = NULL,
   cache_dir   = nhanes_default_cache_dir(),
   ...
 ) {
   data <- nhanes_load_merged(year, cache_dir)
 
-  if (!is.null(covariates)) {
-    missing_covs <- setdiff(covariates, names(data))
+  # Translate user names → NHANES names via dictionary
+  covariates_nhanes  <- nhanes_translate(covariates,          dictionary)
+  conditional_nhanes <- nhanes_translate_names(conditional,   dictionary)
+
+  if (!is.null(covariates_nhanes)) {
+    missing_covs <- setdiff(covariates_nhanes, names(data))
     if (length(missing_covs) > 0) {
       stop(
         "Covariates not found in NHANES data: ",
@@ -208,12 +220,12 @@ sample_covariates_nhanes <- function(
   }
 
   # Apply conditional filters before sampling
-  if (!is.null(conditional)) {
-    for (key in names(conditional)) {
+  if (!is.null(conditional_nhanes)) {
+    for (key in names(conditional_nhanes)) {
       data <- dplyr::filter(
         data,
-        .data[[key]] >= min(conditional[[key]]) &
-          .data[[key]] <= max(conditional[[key]])
+        .data[[key]] >= min(conditional_nhanes[[key]]) &
+          .data[[key]] <= max(conditional_nhanes[[key]])
       )
     }
   }
@@ -243,13 +255,37 @@ sample_covariates_nhanes <- function(
   }
 
   # Select output columns (always drop SEQN)
-  if (!is.null(covariates)) {
-    data <- dplyr::select(data, dplyr::all_of(covariates))
+  if (!is.null(covariates_nhanes)) {
+    data <- dplyr::select(data, dplyr::all_of(covariates_nhanes))
   } else {
     data <- dplyr::select(data, -"SEQN")
   }
 
+  # Rename NHANES names back to user-defined names
+  if (!is.null(dictionary)) {
+    nhanes_to_user <- setNames(names(dictionary), as.character(dictionary))
+    idx <- match(names(data), names(nhanes_to_user))
+    names(data)[!is.na(idx)] <- nhanes_to_user[na.omit(idx)]
+  }
+
   data
+}
+
+#' Translate a character vector of names through a dictionary
+#' @noRd
+nhanes_translate <- function(names_vec, dictionary) {
+  if (is.null(names_vec) || is.null(dictionary)) return(names_vec)
+  vapply(names_vec, function(x) {
+    if (x %in% names(dictionary)) dictionary[[x]] else x
+  }, character(1), USE.NAMES = FALSE)
+}
+
+#' Translate the names of a named list (e.g. conditional) through a dictionary
+#' @noRd
+nhanes_translate_names <- function(named_list, dictionary) {
+  if (is.null(named_list) || is.null(dictionary)) return(named_list)
+  names(named_list) <- nhanes_translate(names(named_list), dictionary)
+  named_list
 }
 
 #' Default cache directory inside the package installation folder

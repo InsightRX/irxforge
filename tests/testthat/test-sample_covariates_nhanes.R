@@ -126,6 +126,66 @@ test_that("errors with clear message when cache file is missing", {
   )
 })
 
+# ---- dictionary argument ----
+
+test_that("dictionary renames output columns to user-defined names", {
+  tmp <- nhanes_temp_cache()
+  out <- sample_covariates_nhanes(
+    covariates = c("WT", "HT", "AGE"),
+    dictionary = list("WT" = "BMXWT", "HT" = "BMXHT", "AGE" = "RIDAGEYR"),
+    n_subjects = 10,
+    cache_dir  = tmp
+  )
+  expect_named(out, c("WT", "HT", "AGE"))
+})
+
+test_that("dictionary translates conditional keys before filtering", {
+  tmp <- nhanes_temp_cache()
+  out <- sample_covariates_nhanes(
+    covariates  = c("AGE"),
+    dictionary  = list("AGE" = "RIDAGEYR"),
+    conditional = list("AGE" = c(30, 50)),
+    n_subjects  = 50,
+    cache_dir   = tmp
+  )
+  expect_true(all(out$AGE >= 30 & out$AGE <= 50))
+})
+
+test_that("names absent from dictionary are passed through unchanged", {
+  tmp <- nhanes_temp_cache()
+  out <- sample_covariates_nhanes(
+    covariates = c("WT", "RIDAGEYR"),
+    dictionary = list("WT" = "BMXWT"),
+    n_subjects = 5,
+    cache_dir  = tmp
+  )
+  expect_named(out, c("WT", "RIDAGEYR"))
+})
+
+test_that("NULL dictionary leaves output names unchanged", {
+  tmp <- nhanes_temp_cache()
+  out <- sample_covariates_nhanes(
+    covariates = c("BMXWT", "RIDAGEYR"),
+    dictionary = NULL,
+    n_subjects = 5,
+    cache_dir  = tmp
+  )
+  expect_named(out, c("BMXWT", "RIDAGEYR"))
+})
+
+test_that("dictionary with unmapped NHANES name in covariates errors clearly", {
+  tmp <- nhanes_temp_cache()
+  expect_error(
+    sample_covariates_nhanes(
+      covariates = c("WT"),
+      dictionary = list("WT" = "NOTACOLUMN"),
+      n_subjects = 5,
+      cache_dir  = tmp
+    ),
+    "Covariates not found"
+  )
+})
+
 test_that("nhanes method is dispatched from sample_covariates()", {
   local_mocked_bindings(sample_covariates_nhanes = function(...) "success")
   expect_equal(sample_covariates(method = "nhanes"), "success")
