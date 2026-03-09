@@ -38,6 +38,149 @@
 #' the probability of selection and non-response. Use `use_weights = TRUE` to
 #' account for this when sampling.
 #'
+#' @section Key covariates in the default cache (NHANES 2017-2018):
+#' The default cache merges all Demographics, Laboratory, and Examination
+#' tables. The full merged dataset contains all variables from every table in
+#' those groups; the most commonly used ones are listed below. Measurement
+#' variables only — administrative comment-code fields and SI-unit duplicates
+#' are omitted for brevity.
+#'
+#' **Demographics (DEMO_J)**
+#'
+#' | Variable | Description |
+#' |----------|-------------|
+#' | RIDAGEYR | Age in years at screening (top-coded at 80) |
+#' | RIDAGEMN | Age in months at screening (ages ≤ 24 months) |
+#' | RIAGENDR | Gender (1 = Male, 2 = Female) |
+#' | RIDRETH1 | Race/Hispanic origin |
+#' | RIDRETH3 | Race/Hispanic origin (includes Non-Hispanic Asian) |
+#' | RIDEXPRG | Pregnancy status (females 20–44 at exam) |
+#' | DMDBORN4 | Country of birth |
+#' | DMDCITZN | Citizenship status |
+#' | DMDEDUC2 | Education level – adults 20+ |
+#' | DMDEDUC3 | Education level – youth 6–19 |
+#' | DMDMARTL | Marital status |
+#' | DMDYRSUS | Years in the US |
+#' | DMDFMSIZ | Total number of people in the family |
+#' | DMDHHSIZ | Total number of people in the household |
+#' | INDFMIN2 | Total family income (range value, USD) |
+#' | INDFMPIR | Ratio of family income to poverty guidelines |
+#' | INDHHIN2 | Total household income (range value, USD) |
+#' | WTINT2YR | Full sample 2-year interview weight |
+#' | WTMEC2YR | Full sample 2-year MEC exam weight |
+#'
+#' **Body Measures (BMX_J)**
+#'
+#' | Variable | Description |
+#' |----------|-------------|
+#' | BMXWT    | Weight (kg) |
+#' | BMXHT    | Standing height (cm) |
+#' | BMXBMI   | Body Mass Index (kg/m²) |
+#' | BMXWAIST | Waist circumference (cm) |
+#' | BMXHIP   | Hip circumference (cm) |
+#' | BMXARMC  | Arm circumference (cm) |
+#' | BMXARML  | Upper arm length (cm) |
+#' | BMXLEG   | Upper leg length (cm) |
+#'
+#' **Blood Pressure & Pulse (BPX_J)**
+#'
+#' | Variable | Description |
+#' |----------|-------------|
+#' | BPXSY1   | Systolic blood pressure, 1st reading (mm Hg) |
+#' | BPXSY2   | Systolic blood pressure, 2nd reading (mm Hg) |
+#' | BPXSY3   | Systolic blood pressure, 3rd reading (mm Hg) |
+#' | BPXDI1   | Diastolic blood pressure, 1st reading (mm Hg) |
+#' | BPXDI2   | Diastolic blood pressure, 2nd reading (mm Hg) |
+#' | BPXDI3   | Diastolic blood pressure, 3rd reading (mm Hg) |
+#' | BPXPLS   | 60-second pulse (beats/min) |
+#'
+#' **Glycohemoglobin (GHB_J)**
+#'
+#' | Variable | Description |
+#' |----------|-------------|
+#' | LBXGH    | Glycohemoglobin / HbA1c (%) |
+#'
+#' **Standard Biochemistry Profile (BIOPRO_J)**
+#'
+#' | Variable  | Description |
+#' |-----------|-------------|
+#' | LBXSAL    | Albumin (g/dL) |
+#' | LBXSBU    | Blood urea nitrogen / BUN (mg/dL) |
+#' | LBXSCA    | Total calcium (mg/dL) |
+#' | LBXSCR    | Creatinine, serum (mg/dL) |
+#' | LBXSGL    | Glucose, serum (mg/dL) |
+#' | LBXSGB    | Globulin (g/dL) |
+#' | LBXSIR    | Iron, serum (ug/dL) |
+#' | LBXSPH    | Phosphorus (mg/dL) |
+#' | LBXSTB    | Total bilirubin (mg/dL) |
+#' | LBXSTP    | Total protein (g/dL) |
+#' | LBXSTR    | Triglycerides, serum (mg/dL) |
+#' | LBXSUA    | Uric acid (mg/dL) |
+#' | LBXSATSI  | Alanine aminotransferase / ALT (U/L) |
+#' | LBXSASSI  | Aspartate aminotransferase / AST (U/L) |
+#' | LBXSGTSI  | Gamma-glutamyl transferase / GGT (IU/L) |
+#' | LBXSAPSI  | Alkaline phosphatase / ALP (IU/L) |
+#' | LBXSCK    | Creatine phosphokinase / CPK (IU/L) |
+#' | LBXSCH    | Total cholesterol, serum (mg/dL) |
+#' | LBXSC3SI  | Bicarbonate (mmol/L) |
+#' | LBXSCLSI  | Chloride (mmol/L) |
+#' | LBXSKSI   | Potassium (mmol/L) |
+#' | LBXSNASI  | Sodium (mmol/L) |
+#' | LBXSOSSI  | Osmolality (mmol/kg) |
+#' | LBXSLDSI  | Lactate dehydrogenase / LDH (IU/L) |
+#'
+#' **Complete Blood Count (CBC_J)**
+#'
+#' | Variable  | Description |
+#' |-----------|-------------|
+#' | LBXWBCSI  | White blood cell count (1000 cells/µL) |
+#' | LBXRBCSI  | Red blood cell count (million cells/µL) |
+#' | LBXHGB    | Hemoglobin (g/dL) |
+#' | LBXHCT    | Hematocrit (%) |
+#' | LBXMCVSI  | Mean cell volume (fL) |
+#' | LBXMCHSI  | Mean cell hemoglobin (pg) |
+#' | LBXMC     | Mean cell hemoglobin concentration (g/dL) |
+#' | LBXRDW    | Red cell distribution width (%) |
+#' | LBXPLTSI  | Platelet count (1000 cells/µL) |
+#' | LBXMPSI   | Mean platelet volume (fL) |
+#' | LBXLYPCT  | Lymphocyte percent (%) |
+#' | LBDLYMNO  | Lymphocyte number (1000 cells/µL) |
+#' | LBXNEPCT  | Segmented neutrophils percent (%) |
+#' | LBDNENO   | Segmented neutrophils number (1000 cells/µL) |
+#' | LBXMOPCT  | Monocyte percent (%) |
+#' | LBDMONO   | Monocyte number (1000 cells/µL) |
+#' | LBXEOPCT  | Eosinophils percent (%) |
+#' | LBDEONO   | Eosinophils number (1000 cells/µL) |
+#' | LBXBAPCT  | Basophils percent (%) |
+#' | LBDBANO   | Basophils number (1000 cells/µL) |
+#' | LBXNRBC   | Nucleated red blood cells (/100 WBC) |
+#'
+#' **Lipids**
+#'
+#' | Variable  | Table    | Description |
+#' |-----------|----------|-------------|
+#' | LBXTC     | TCHOL_J  | Total cholesterol (mg/dL) |
+#' | LBDHDD    | HDL_J    | Direct HDL-cholesterol (mg/dL) |
+#' | LBXTR     | TRIGLY_J | Triglycerides (mg/dL) |
+#' | LBDLDL    | TRIGLY_J | LDL-cholesterol, Friedewald equation (mg/dL) |
+#' | LBDLDLM   | TRIGLY_J | LDL-cholesterol, Martin-Hopkins equation (mg/dL) |
+#' | LBDLDLN   | TRIGLY_J | LDL-cholesterol, NIH equation 2 (mg/dL) |
+#'
+#' **Urine Albumin & Creatinine (ALB_CR_J)**
+#'
+#' | Variable | Description |
+#' |----------|-------------|
+#' | URXUCR   | Creatinine, urine (mg/dL) |
+#' | URXCRS   | Creatinine, urine (µmol/L) |
+#' | URXUMA   | Albumin, urine (µg/mL) |
+#' | URXUMS   | Albumin, urine (mg/L) |
+#' | URDACT   | Albumin-creatinine ratio (mg/g) |
+#'
+#' The full merged dataset contains additional variables from all other
+#' Laboratory and Examination tables downloaded for the requested year.
+#' Use `names(readRDS(file.path(cache_dir, "nhanes_<year>.rds")))` to
+#' inspect all available columns.
+#'
 #' @returns a data.frame with `n_subjects` rows and the requested covariates
 #'   as columns.
 #'
