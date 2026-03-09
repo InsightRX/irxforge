@@ -7,6 +7,7 @@ mock_nhanes <- data.frame(
   WTMEC2YR = seq(1000, 10000, length.out = 20),
   BMXBMI   = seq(18, 37, length.out = 20),
   BMXWT    = seq(50, 110, length.out = 20),
+  BMXHT    = seq(150, 190, length.out = 20),
   stringsAsFactors = FALSE
 )
 
