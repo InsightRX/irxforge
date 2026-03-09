@@ -1,15 +1,17 @@
 .onLoad <- function(libname, pkgname) {
   cache_dir <- nhanes_default_cache_dir()
-  if (!dir.exists(cache_dir) || length(list.files(cache_dir, pattern = "\\.rds$")) == 0) {
+  rds_file  <- file.path(cache_dir, "nhanes_2017-2018.rds")
+  if (!file.exists(rds_file)) {
     tryCatch(
       {
         packageStartupMessage(
-          "irxforge: Downloading default NHANES tables (DEMO, BMX; 2017-2018) ",
-          "to ", cache_dir, " ...\n",
-          "  This only happens once. Call download_nhanes_cache() to add more tables."
+          "irxforge: Downloading NHANES 2017-2018 (DEMO, LAB, EXAM) to ",
+          cache_dir, " ...\n",
+          "  This only happens once. ",
+          "Call download_nhanes_cache() to add more years or groups."
         )
         download_nhanes_cache(
-          tables = c("DEMO", "BMX"),
+          groups = c("DEMO", "LAB", "EXAM"),
           years  = "2017-2018",
           path   = cache_dir
         )
@@ -18,7 +20,7 @@
       error = function(e) {
         packageStartupMessage(
           "irxforge: Could not download NHANES cache: ", conditionMessage(e), "\n",
-          "  Call download_nhanes_cache() to set it up when a network is available."
+          "  Call download_nhanes_cache() when a network connection is available."
         )
       }
     )

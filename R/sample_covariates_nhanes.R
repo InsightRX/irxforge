@@ -1,12 +1,9 @@
 #' Sample covariates from the NHANES database
 #'
-#' @param tables character vector of NHANES table names to download and merge,
-#'   e.g. `c("DEMO", "BMX")`. Tables are merged on SEQN (respondent sequence
-#'   number) using an inner join, so only subjects with data in all requested
-#'   tables are retained.
-#' @param variables character vector of variable names to include in the
-#'   output. If `NULL` (default), all variables from all tables are included
-#'   (SEQN is always dropped from output).
+#' @param covariates character vector of NHANES variable names to include in
+#'   the output, e.g. `c("RIDAGEYR", "BMXBMI", "WTMEC2YR")`. If `NULL`
+#'   (default), all variables in the cached data are returned (SEQN is always
+#'   dropped).
 #' @param year NHANES survey cycle, e.g. `"2017-2018"`. Supported values:
 #'   `"1999-2000"`, `"2001-2002"`, `"2003-2004"`, `"2005-2006"`,
 #'   `"2007-2008"`, `"2009-2010"`, `"2011-2012"`, `"2013-2014"`,
@@ -19,65 +16,49 @@
 #'   weights (`WTMEC2YR`) for probability-proportional sampling, which
 #'   produces a sample more representative of the U.S. civilian
 #'   non-institutionalized population. Requires `WTMEC2YR` to be present in
-#'   the downloaded data (i.e., `"DEMO"` must be included in `tables`).
-#'   Default is `FALSE` (simple random sampling with replacement).
-#' @param cache_dir path to a directory of pre-downloaded RDS files created by
-#'   [download_nhanes_cache()]. Defaults to the package-level NHANES cache
-#'   populated automatically on first load (see Details). Set to `NULL` to
-#'   always download via `nhanesA` regardless of the cache.
+#'   the cached data (included when `"DEMO"` was downloaded). Default `FALSE`.
+#' @param cache_dir path to a directory containing a merged NHANES RDS file
+#'   created by [download_nhanes_cache()]. Defaults to the package-level cache
+#'   populated automatically on first load. Set to `NULL` to always download
+#'   on demand via `nhanesA` (requires internet).
 #' @param ... additional arguments (currently unused)
 #'
 #' @details
-#' On first load, `irxforge` automatically downloads a default set of NHANES
-#' tables (`DEMO` and `BMX`, cycle 2017-2018) into a cache inside the package
-#' installation directory. Subsequent calls to `sample_covariates_nhanes()`
+#' On first load, `irxforge` automatically downloads NHANES Demographics,
+#' Laboratory, and Examination tables (cycle 2017-2018) and saves a single
+#' merged RDS file in the package installation directory. Subsequent calls
 #' read from this cache with no internet access required.
 #'
-#' Call [download_nhanes_cache()] directly to pre-download additional tables or
-#' survey years into the same (or a different) cache directory.
+#' Call [download_nhanes_cache()] to pre-download additional years or groups.
 #'
-#' If a requested table is not found in `cache_dir`, the function falls back to
-#' downloading it via `nhanesA`. If `nhanesA` is also unavailable, an error is
-#' raised.
+#' If the cache file for the requested year is absent, an error is raised with
+#' instructions to run [download_nhanes_cache()].
 #'
 #' NHANES uses a complex multi-stage sampling design. Survey weights reflect
 #' the probability of selection and non-response. Use `use_weights = TRUE` to
-#' account for this when sampling. See the NHANES analytic guidelines for
-#' details.
+#' account for this when sampling.
 #'
-#' @returns a data.frame with `n_subjects` rows and the requested variables as
-#'   columns.
+#' @returns a data.frame with `n_subjects` rows and the requested covariates
+#'   as columns.
 #'
 #' @export
 sample_covariates_nhanes <- function(
-  tables,
-  variables = NULL,
-  year = "2017-2018",
+  covariates = NULL,
+  year       = "2017-2018",
   n_subjects = 100,
   conditional = NULL,
   use_weights = FALSE,
-  cache_dir = nhanes_default_cache_dir(),
+  cache_dir   = nhanes_default_cache_dir(),
   ...
 ) {
-  year_suffix <- nhanes_year_suffix(year)
+  data <- nhanes_load_merged(year, cache_dir)
 
-  # Load each table from local cache or download via nhanesA
-  data <- NULL
-  for (table in tables) {
-    tbl_data <- nhanes_load_table(table, year_suffix, cache_dir)
-    if (is.null(data)) {
-      data <- tbl_data
-    } else {
-      data <- dplyr::inner_join(data, tbl_data, by = "SEQN")
-    }
-  }
-
-  if (!is.null(variables)) {
-    missing_vars <- setdiff(variables, names(data))
-    if (length(missing_vars) > 0) {
+  if (!is.null(covariates)) {
+    missing_covs <- setdiff(covariates, names(data))
+    if (length(missing_covs) > 0) {
       stop(
-        "Variables not found in the downloaded tables: ",
-        paste(missing_vars, collapse = ", "),
+        "Covariates not found in NHANES data: ",
+        paste(missing_covs, collapse = ", "),
         call. = FALSE
       )
     }
@@ -105,22 +86,22 @@ sample_covariates_nhanes <- function(
   if (use_weights) {
     if (!"WTMEC2YR" %in% names(data)) {
       stop(
-        "Survey weights (WTMEC2YR) not found. ",
-        "Include \"DEMO\" in `tables` to enable weighted sampling.",
+        "Survey weights (WTMEC2YR) not found in the cached data. ",
+        "Re-run download_nhanes_cache() with groups including \"DEMO\".",
         call. = FALSE
       )
     }
     weights <- data$WTMEC2YR
     weights[is.na(weights)] <- 0
-    idx <- sample(seq_len(nrow(data)), size = n_subjects, replace = TRUE, prob = weights)
+    idx  <- sample(seq_len(nrow(data)), size = n_subjects, replace = TRUE, prob = weights)
     data <- data[idx, ]
   } else {
     data <- dplyr::slice_sample(data, n = n_subjects, replace = TRUE)
   }
 
-  # Select output variables and drop SEQN
-  if (!is.null(variables)) {
-    data <- dplyr::select(data, dplyr::all_of(variables))
+  # Select output columns (always drop SEQN)
+  if (!is.null(covariates)) {
+    data <- dplyr::select(data, dplyr::all_of(covariates))
   } else {
     data <- dplyr::select(data, -"SEQN")
   }
@@ -134,27 +115,33 @@ nhanes_default_cache_dir <- function() {
   file.path(system.file(package = "irxforge"), "nhanes_cache")
 }
 
-#' Load a single NHANES table: cache first, then nhanesA fallback
+#' Load a merged NHANES RDS for a given year
 #' @noRd
-nhanes_load_table <- function(table, suffix, cache_dir) {
+nhanes_load_merged <- function(year, cache_dir) {
+  nhanes_year_suffix(year)  # validate year
   if (!is.null(cache_dir)) {
-    file_path <- file.path(cache_dir, paste0(table, suffix, ".rds"))
-    if (file.exists(file_path)) {
-      return(readRDS(file_path))
+    rds_path <- file.path(cache_dir, paste0("nhanes_", year, ".rds"))
+    if (file.exists(rds_path)) {
+      return(readRDS(rds_path))
     }
-    message(
-      "NHANES cache miss for ", basename(file_path),
-      "; falling back to nhanesA download."
-    )
-  }
-  if (!requireNamespace("nhanesA", quietly = TRUE)) {
     stop(
-      "Cached file not found and 'nhanesA' is not installed. ",
-      "Run download_nhanes_cache() to populate the cache, or install nhanesA.",
+      "NHANES cache not found for year ", year, ": ", rds_path, ".\n",
+      "Run download_nhanes_cache(years = \"", year, "\") to create it.",
       call. = FALSE
     )
   }
-  nhanesA::nhanes(paste0(table, suffix))
+  # cache_dir = NULL: download on demand (slow; use only for one-off calls)
+  if (!requireNamespace("nhanesA", quietly = TRUE)) {
+    stop(
+      "No cached NHANES data found and 'nhanesA' is not installed. ",
+      "Run download_nhanes_cache() or install nhanesA.",
+      call. = FALSE
+    )
+  }
+  message("No cache_dir supplied; downloading NHANES data on demand (this may be slow).")
+  tmp <- tempfile()
+  download_nhanes_cache(years = year, path = tmp)
+  readRDS(file.path(tmp, paste0("nhanes_", year, ".rds")))
 }
 
 #' Map NHANES survey year to table name suffix
