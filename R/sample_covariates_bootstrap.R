@@ -1,7 +1,7 @@
 #' Sample covariates using bootstrap
 #'
 #' @inheritParams sample_covariates_mice
-#' @param rm.na logical. If `TRUE` (default), rows with `NA` in any column are
+#' @param na.rm logical. If `TRUE` (default), rows with `NA` in any column are
 #'   dropped before sampling.
 #'
 #' @returns a data.frame with the simulated covariates, with `n_subjects`
@@ -13,11 +13,11 @@ sample_covariates_bootstrap <- function(
   n_subjects = nrow(data),
   conditional = NULL,
   seed = NULL,
-  rm.na = TRUE,
+  na.rm = TRUE,
   ...
 ) {
   if (!is.null(seed)) set.seed(seed)
-  if (rm.na) {
+  if (na.rm) {
     data <- data[stats::complete.cases(data), , drop = FALSE]
   }
   if(!is.null(conditional)) {

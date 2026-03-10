@@ -8,6 +8,8 @@ sample_covariates_bootstrap(
   data,
   n_subjects = nrow(data),
   conditional = NULL,
+  seed = NULL,
+  na.rm = TRUE,
   ...
 )
 }
@@ -21,6 +23,12 @@ subjects in the data.}
 
 \item{conditional}{list with conditional limits for sampled population, e.g.
 \code{list("WT" = c(40, 60), "BMI" = c(15, 25))}.}
+
+\item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
+Default \code{NULL} does not set a seed.}
+
+\item{na.rm}{logical. If \code{TRUE} (default), rows with \code{NA} in any column are
+dropped before sampling.}
 
 \item{...}{additional arguments passed to \code{mice::mice()} function}
 }

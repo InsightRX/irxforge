@@ -10,7 +10,9 @@ sample_covariates_nhanes(
   n_subjects = 100,
   conditional = NULL,
   use_weights = FALSE,
+  seed = NULL,
   dictionary = NULL,
+  na.rm = TRUE,
   cache_dir = nhanes_default_cache_dir(),
   ...
 )
@@ -38,6 +40,9 @@ produces a sample more representative of the U.S. civilian
 non-institutionalized population. Requires \code{WTMEC2YR} to be present in
 the cached data (included when \code{"DEMO"} was downloaded). Default \code{FALSE}.}
 
+\item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
+Default \code{NULL} does not set a seed.}
+
 \item{dictionary}{named list mapping user-defined covariate names to their
 NHANES variable names, e.g.
 \code{list("WT" = "BMXWT", "HT" = "BMXHT", "AGE" = "RIDAGEYR")}.
@@ -45,6 +50,9 @@ Names in \code{covariates} and \code{conditional} that appear as keys in
 \code{dictionary} are translated to the corresponding NHANES names before
 lookup and translated back in the output. Names not present in
 \code{dictionary} are treated as direct NHANES variable names.}
+
+\item{na.rm}{logical. If \code{TRUE} (default), rows with \code{NA} in any of the
+requested covariates are dropped before sampling.}
 
 \item{cache_dir}{path to a directory containing a merged NHANES RDS file
 created by \code{\link[=download_nhanes_cache]{download_nhanes_cache()}}. Defaults to the package-level cache

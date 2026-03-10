@@ -62,15 +62,15 @@ test_that("returns error when filtered data is empty", {
   )
 })
 
-test_that("rm.na = TRUE (default) drops rows with NAs before sampling", {
+test_that("na.rm = TRUE (default) drops rows with NAs before sampling", {
   dat <- data.frame(x = c(1:5, NA, 7:10), y = rnorm(10))
   out <- sample_covariates_bootstrap(dat, n_subjects = 20)
   expect_false(anyNA(out$x))
 })
 
-test_that("rm.na = FALSE allows NAs to be sampled", {
+test_that("na.rm = FALSE allows NAs to be sampled", {
   dat <- data.frame(x = rep(NA_real_, 10))
-  out <- sample_covariates_bootstrap(dat, n_subjects = 5, rm.na = FALSE)
+  out <- sample_covariates_bootstrap(dat, n_subjects = 5, na.rm = FALSE)
   expect_true(all(is.na(out$x)))
 })
 

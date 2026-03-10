@@ -12,6 +12,7 @@ sample_covariates_mice(
   n_subjects = nrow(data),
   cont_method = "pmm",
   replicates = 1,
+  seed = NULL,
   ...
 )
 }
@@ -34,6 +35,9 @@ default is \code{pmm}.}
 
 \item{replicates}{number of multiple imputations replicates to sample.
 Default is 1.}
+
+\item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
+Default \code{NULL} does not set a seed.}
 
 \item{...}{additional arguments passed to \code{mice::mice()} function}
 }

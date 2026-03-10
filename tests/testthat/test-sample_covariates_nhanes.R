@@ -27,7 +27,7 @@ test_that("returns data.frame with correct number of rows", {
   expect_equal(nrow(out), 15)
 })
 
-test_that("rm.na = TRUE (default) drops rows with NAs before sampling", {
+test_that("na.rm = TRUE (default) drops rows with NAs before sampling", {
   tmp <- withr::local_tempdir()
   na_nhanes <- mock_nhanes
   na_nhanes$BMXWT[c(1, 3, 5)] <- NA
@@ -40,7 +40,7 @@ test_that("rm.na = TRUE (default) drops rows with NAs before sampling", {
   expect_false(anyNA(out$BMXWT))
 })
 
-test_that("rm.na = FALSE allows NAs to be sampled", {
+test_that("na.rm = FALSE allows NAs to be sampled", {
   tmp <- withr::local_tempdir()
   na_nhanes <- mock_nhanes
   na_nhanes$BMXWT <- NA_real_
@@ -48,7 +48,7 @@ test_that("rm.na = FALSE allows NAs to be sampled", {
   out <- sample_covariates_nhanes(
     covariates = c("BMXWT"),
     n_subjects = 5,
-    rm.na      = FALSE,
+    na.rm      = FALSE,
     cache_dir  = tmp
   )
   expect_true(all(is.na(out$BMXWT)))

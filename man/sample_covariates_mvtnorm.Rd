@@ -10,6 +10,7 @@ sample_covariates_mvtnorm(
   n_subjects = nrow(data),
   exponential = FALSE,
   conditional = NULL,
+  seed = NULL,
   ...
 )
 }
@@ -27,6 +28,9 @@ subjects in the data.}
 \item{exponential}{sample from exponential distribution? Default \code{FALSE}.}
 
 \item{conditional}{description...}
+
+\item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
+Default \code{NULL} does not set a seed.}
 
 \item{...}{additional arguments passed to \code{mvrnorm()} function}
 }
