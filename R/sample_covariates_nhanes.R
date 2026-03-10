@@ -26,6 +26,8 @@
 #'   `dictionary` are translated to the corresponding NHANES names before
 #'   lookup and translated back in the output. Names not present in
 #'   `dictionary` are treated as direct NHANES variable names.
+#' @param rm.na logical. If `TRUE` (default), rows with `NA` in any of the
+#'   requested covariates are dropped before sampling.
 #' @param cache_dir path to a directory containing a merged NHANES RDS file
 #'   created by [download_nhanes_cache()]. Defaults to the package-level cache
 #'   populated automatically on first load. Set to `NULL` to always download
@@ -202,6 +204,7 @@ sample_covariates_nhanes <- function(
   use_weights = FALSE,
   seed        = NULL,
   dictionary  = NULL,
+  rm.na       = TRUE,
   cache_dir   = nhanes_default_cache_dir(),
   ...
 ) {
@@ -222,6 +225,16 @@ sample_covariates_nhanes <- function(
         call. = FALSE
       )
     }
+  }
+
+  # Drop rows with NAs in the requested covariates (or all non-SEQN columns)
+  if (rm.na) {
+    cols_to_check <- if (!is.null(covariates_nhanes)) {
+      covariates_nhanes
+    } else {
+      setdiff(names(data), "SEQN")
+    }
+    data <- data[stats::complete.cases(data[, cols_to_check, drop = FALSE]), , drop = FALSE]
   }
 
   # Apply conditional filters before sampling

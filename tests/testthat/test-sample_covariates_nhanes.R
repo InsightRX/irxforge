@@ -27,6 +27,33 @@ test_that("returns data.frame with correct number of rows", {
   expect_equal(nrow(out), 15)
 })
 
+test_that("rm.na = TRUE (default) drops rows with NAs before sampling", {
+  tmp <- withr::local_tempdir()
+  na_nhanes <- mock_nhanes
+  na_nhanes$BMXWT[c(1, 3, 5)] <- NA
+  saveRDS(na_nhanes, file.path(tmp, "nhanes_2017-2018.rds"))
+  out <- sample_covariates_nhanes(
+    covariates = c("BMXWT"),
+    n_subjects = 20,
+    cache_dir  = tmp
+  )
+  expect_false(anyNA(out$BMXWT))
+})
+
+test_that("rm.na = FALSE allows NAs to be sampled", {
+  tmp <- withr::local_tempdir()
+  na_nhanes <- mock_nhanes
+  na_nhanes$BMXWT <- NA_real_
+  saveRDS(na_nhanes, file.path(tmp, "nhanes_2017-2018.rds"))
+  out <- sample_covariates_nhanes(
+    covariates = c("BMXWT"),
+    n_subjects = 5,
+    rm.na      = FALSE,
+    cache_dir  = tmp
+  )
+  expect_true(all(is.na(out$BMXWT)))
+})
+
 test_that("SEQN is dropped from output", {
   tmp <- nhanes_temp_cache()
   out <- sample_covariates_nhanes(n_subjects = 5, cache_dir = tmp)
