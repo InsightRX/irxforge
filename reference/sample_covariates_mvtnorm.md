@@ -11,6 +11,7 @@ sample_covariates_mvtnorm(
   n_subjects = nrow(data),
   exponential = FALSE,
   conditional = NULL,
+  seed = NULL,
   ...
 )
 ```
@@ -40,6 +41,12 @@ sample_covariates_mvtnorm(
 - conditional:
 
   description...
+
+- seed:
+
+  integer random seed passed to
+  [`set.seed()`](https://rdrr.io/r/base/Random.html) for
+  reproducibility. Default `NULL` does not set a seed.
 
 - ...:
 

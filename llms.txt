@@ -34,6 +34,8 @@ MIT © InsightRX
   : Create a standardized table for demographics information
 - [`detect_dataset_type()`](https://insightrx.github.io/irxforge/reference/detect_dataset_type.md)
   : Auto-detect data set type
+- [`download_nhanes_cache()`](https://insightrx.github.io/irxforge/reference/download_nhanes_cache.md)
+  : Download and cache NHANES data locally
 - [`get_nominal_timepoints()`](https://insightrx.github.io/irxforge/reference/get_nominal_timepoints.md)
   : Get nominal timepoints based on vector of timepoints
 - [`get_route_from_data_column()`](https://insightrx.github.io/irxforge/reference/get_route_from_data_column.md)
@@ -67,6 +69,8 @@ MIT © InsightRX
   equations (mice)
 - [`sample_covariates_mvtnorm()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mvtnorm.md)
   : Sample covariates from multivariate normal distributions
+- [`sample_covariates_nhanes()`](https://insightrx.github.io/irxforge/reference/sample_covariates_nhanes.md)
+  : Sample covariates from the NHANES database
 - [`syms_to_exprs()`](https://insightrx.github.io/irxforge/reference/syms_to_exprs.md)
   : Defuse a list of symbols
 

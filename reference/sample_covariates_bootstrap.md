@@ -9,6 +9,8 @@ sample_covariates_bootstrap(
   data,
   n_subjects = nrow(data),
   conditional = NULL,
+  seed = NULL,
+  na.rm = TRUE,
   ...
 )
 ```
@@ -30,6 +32,17 @@ sample_covariates_bootstrap(
 
   list with conditional limits for sampled population, e.g.
   `list("WT" = c(40, 60), "BMI" = c(15, 25))`.
+
+- seed:
+
+  integer random seed passed to
+  [`set.seed()`](https://rdrr.io/r/base/Random.html) for
+  reproducibility. Default `NULL` does not set a seed.
+
+- na.rm:
+
+  logical. If `TRUE` (default), rows with `NA` in any column are dropped
+  before sampling.
 
 - ...:
 

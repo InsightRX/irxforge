@@ -13,6 +13,7 @@ sample_covariates_mice(
   n_subjects = nrow(data),
   cont_method = "pmm",
   replicates = 1,
+  seed = NULL,
   ...
 )
 ```
@@ -48,6 +49,12 @@ sample_covariates_mice(
 - replicates:
 
   number of multiple imputations replicates to sample. Default is 1.
+
+- seed:
+
+  integer random seed passed to
+  [`set.seed()`](https://rdrr.io/r/base/Random.html) for
+  reproducibility. Default `NULL` does not set a seed.
 
 - ...:
 

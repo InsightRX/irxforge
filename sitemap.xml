@@ -8,6 +8,7 @@
 <url><loc>https://insightrx.github.io/irxforge/reference/add_nominal_timepoints.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/create_demographics_table.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/detect_dataset_type.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/download_nhanes_cache.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/get_nominal_timepoints.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/get_route_from_data_column.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/index.html</loc></url>
@@ -24,6 +25,7 @@
 <url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_bootstrap.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_mice.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_mvtnorm.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_nhanes.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/syms_to_exprs.html</loc></url>
 </urlset>
 
