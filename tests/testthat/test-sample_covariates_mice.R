@@ -102,3 +102,21 @@ test_that("input class is preserved", {
   expect_s3_class(out_dat, "data.frame")
   expect_equal(nrow(out_dat), nrow(dat) * 5)
 })
+
+test_that("seed produces reproducible output", {
+  dat <- data.frame(
+    AGE = c(20, 30, 40, 50), WT = c(55, 70, 65, 80), SEX = c("M", "F", "F", "M")
+  )
+  out1 <- sample_covariates_mice(dat, cat_covs = "SEX", n_subjects = 4, seed = 1)
+  out2 <- sample_covariates_mice(dat, cat_covs = "SEX", n_subjects = 4, seed = 1)
+  expect_equal(out1, out2)
+})
+
+test_that("different seeds produce different output", {
+  dat <- data.frame(
+    AGE = c(20, 30, 40, 50), WT = c(55, 70, 65, 80), SEX = c("M", "F", "F", "M")
+  )
+  out1 <- sample_covariates_mice(dat, cat_covs = "SEX", n_subjects = 4, seed = 1)
+  out2 <- sample_covariates_mice(dat, cat_covs = "SEX", n_subjects = 4, seed = 2)
+  expect_false(identical(out1, out2))
+})

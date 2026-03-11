@@ -78,3 +78,17 @@ test_that("conditional argument works with multiple variables", {
   expect_true(outside_age_uncond > outside_age_cond * 3)
   expect_true(outside_height_uncond > outside_height_cond * 3)
 })
+
+test_that("seed produces reproducible output", {
+  dat <- data.frame(x = rnorm(50), y = rnorm(50))
+  out1 <- sample_covariates_mvtnorm(dat, n_subjects = 20, seed = 1)
+  out2 <- sample_covariates_mvtnorm(dat, n_subjects = 20, seed = 1)
+  expect_equal(out1, out2)
+})
+
+test_that("different seeds produce different output", {
+  dat <- data.frame(x = rnorm(50), y = rnorm(50))
+  out1 <- sample_covariates_mvtnorm(dat, n_subjects = 20, seed = 1)
+  out2 <- sample_covariates_mvtnorm(dat, n_subjects = 20, seed = 2)
+  expect_false(identical(out1, out2))
+})

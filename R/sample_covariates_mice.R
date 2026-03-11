@@ -12,8 +12,10 @@
 #' `list("WT" = c(40, 60), "BMI" = c(15, 25))`.
 #' @param cont_method method used to predict continuous covariates within mice,
 #' default is `pmm`.
-#' @param replicates number of multiple imputations replicates to sample. 
+#' @param replicates number of multiple imputations replicates to sample.
 #' Default is 1.
+#' @param seed integer random seed passed to [set.seed()] for reproducibility.
+#' Default `NULL` does not set a seed.
 #' @param ... additional arguments passed to `mice::mice()` function
 #'
 #' @details missing values in `data` must be coded as NA
@@ -29,8 +31,10 @@ sample_covariates_mice <- function(
   n_subjects = nrow(data),
   cont_method = "pmm",
   replicates = 1,
+  seed = NULL,
   ...
 ) {
+  if (!is.null(seed)) set.seed(seed)
 
   # names of continuous covariates
   cont_covs <- setdiff(names(data), cat_covs)

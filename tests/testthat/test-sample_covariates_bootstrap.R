@@ -61,3 +61,29 @@ test_that("returns error when filtered data is empty", {
     "No observations present"
   )
 })
+
+test_that("na.rm = TRUE (default) drops rows with NAs before sampling", {
+  dat <- data.frame(x = c(1:5, NA, 7:10), y = rnorm(10))
+  out <- sample_covariates_bootstrap(dat, n_subjects = 20)
+  expect_false(anyNA(out$x))
+})
+
+test_that("na.rm = FALSE allows NAs to be sampled", {
+  dat <- data.frame(x = rep(NA_real_, 10))
+  out <- sample_covariates_bootstrap(dat, n_subjects = 5, na.rm = FALSE)
+  expect_true(all(is.na(out$x)))
+})
+
+test_that("seed produces reproducible output", {
+  dat <- data.frame(x = rnorm(100))
+  out1 <- sample_covariates_bootstrap(dat, n_subjects = 20, seed = 1)
+  out2 <- sample_covariates_bootstrap(dat, n_subjects = 20, seed = 1)
+  expect_equal(out1, out2)
+})
+
+test_that("different seeds produce different output", {
+  dat <- data.frame(x = rnorm(100))
+  out1 <- sample_covariates_bootstrap(dat, n_subjects = 20, seed = 1)
+  out2 <- sample_covariates_bootstrap(dat, n_subjects = 20, seed = 2)
+  expect_false(identical(out1, out2))
+})

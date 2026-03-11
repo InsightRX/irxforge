@@ -4,11 +4,18 @@
 \alias{sample_covariates}
 \title{Sample covariates using a variety of methods}
 \usage{
-sample_covariates(method = c("mvtnorm", "mice", "bootstrap"), ...)
+sample_covariates(
+  method = c("mvtnorm", "mice", "bootstrap", "nhanes"),
+  seed = NULL,
+  ...
+)
 }
 \arguments{
-\item{method}{sampling method, one of \code{mvtnorm}, \code{bootstrap}, or \code{mice}.
-E.g. \code{list(AGE = c(60, 80), WT = c(70, 100))}.}
+\item{method}{sampling method, one of \code{mvtnorm}, \code{bootstrap}, \code{mice}, or
+\code{nhanes}. E.g. \code{list(AGE = c(60, 80), WT = c(70, 100))}.}
+
+\item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
+Default \code{NULL} does not set a seed.}
 
 \item{...}{arguments passed to lower-level function(s).}
 }

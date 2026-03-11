@@ -16,3 +16,12 @@ test_that("bootstrap calls sample_covariates_bootstrap()", {
 test_that("errors on invalid method", {
   expect_error(sample_covariates(method = "invalid"), class = "rlang_error")
 })
+
+test_that("seed is passed to the child function", {
+  received_seed <- NULL
+  local_mocked_bindings(
+    sample_covariates_bootstrap = function(seed, ...) { received_seed <<- seed; "ok" }
+  )
+  sample_covariates(method = "bootstrap", seed = 42)
+  expect_equal(received_seed, 42)
+})
