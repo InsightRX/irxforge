@@ -16,7 +16,7 @@
 #'   weights (`WTMEC2YR`) for probability-proportional sampling, which
 #'   produces a sample more representative of the U.S. civilian
 #'   non-institutionalized population. Requires `WTMEC2YR` to be present in
-#'   the cached data (included when `"DEMO"` was downloaded). Default `FALSE`.
+#'   the cached data (included when `"DEMO"` was downloaded). Default `TRUE`.
 #' @param seed integer random seed passed to [set.seed()] for reproducibility.
 #'   Default `NULL` does not set a seed.
 #' @param dictionary named list mapping user-defined covariate names to their
@@ -201,7 +201,7 @@ sample_covariates_nhanes <- function(
   year        = "2017-2018",
   n_subjects  = 100,
   conditional = NULL,
-  use_weights = FALSE,
+  use_weights = TRUE,
   seed        = NULL,
   dictionary  = NULL,
   na.rm       = TRUE,

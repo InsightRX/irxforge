@@ -9,7 +9,7 @@ sample_covariates_nhanes(
   year = "2017-2018",
   n_subjects = 100,
   conditional = NULL,
-  use_weights = FALSE,
+  use_weights = TRUE,
   seed = NULL,
   dictionary = NULL,
   na.rm = TRUE,
@@ -38,7 +38,7 @@ applied before sampling.}
 weights (\code{WTMEC2YR}) for probability-proportional sampling, which
 produces a sample more representative of the U.S. civilian
 non-institutionalized population. Requires \code{WTMEC2YR} to be present in
-the cached data (included when \code{"DEMO"} was downloaded). Default \code{FALSE}.}
+the cached data (included when \code{"DEMO"} was downloaded). Default \code{TRUE}.}
 
 \item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
 Default \code{NULL} does not set a seed.}
