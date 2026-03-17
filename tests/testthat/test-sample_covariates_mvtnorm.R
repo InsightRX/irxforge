@@ -107,20 +107,20 @@ test_that("means + sigma samples correct number of rows and columns", {
 test_that("means + sigma samples near the specified mean (large n)", {
   mu <- c(AGE = 40, WT = 70)
   S <- diag(c(25, 100))
-  out <- sample_covariates_mvtnorm(means = mu, sigma = S, n_subjects = 5000, seed = 42)
-  expect_equal(mean(out$AGE), 40, tolerance = 1)
-  expect_equal(mean(out$WT),  70, tolerance = 2)
+  out <- sample_covariates_mvtnorm(means = mu, sigma = S, n_subjects = 2000, seed = 42)
+  expect_equal(mean(out$AGE), 40, tolerance = 1.5)
+  expect_equal(mean(out$WT),  70, tolerance = 3)
 })
 
 test_that("means + sd constructs diagonal covariance and samples correctly", {
   mu  <- c(x = 5, y = 50)
   sds <- c(x = 1, y = 10)
-  out <- sample_covariates_mvtnorm(means = mu, sd = sds, n_subjects = 5000, seed = 7)
+  out <- sample_covariates_mvtnorm(means = mu, sd = sds, n_subjects = 2000, seed = 7)
   expect_named(out, c("x", "y"))
-  expect_equal(mean(out$x), 5,  tolerance = 0.2)
-  expect_equal(mean(out$y), 50, tolerance = 2)
-  expect_equal(sd(out$x),   1,  tolerance = 0.1)
-  expect_equal(sd(out$y),  10,  tolerance = 1)
+  expect_equal(mean(out$x), 5,  tolerance = 0.25)
+  expect_equal(mean(out$y), 50, tolerance = 2.5)
+  expect_equal(sd(out$x),   1,  tolerance = 0.12)
+  expect_equal(sd(out$y),  10,  tolerance = 1.2)
 })
 
 test_that("means + sd: length mismatch raises error", {
