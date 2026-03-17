@@ -65,3 +65,19 @@ standard deviations (\code{sd}).
 \note{
 missing values in \code{data} must be coded as NA
 }
+\examples{
+sample_covariates_mvtnorm(
+  means = c(WT = 70, HT = 170, AGE = 50),
+  sd = c(10, 20, 5),
+  n_subjects = 100
+)
+sample_covariates_mvtnorm(
+  means = c(WT = 70, HT = 170, AGE = 50),
+  sigma = matrix(
+    c(100,  20,  12,
+      20,  400,  10,
+      12,   10,  25), nrow = 3, ncol = 3),
+  n_subjects = 100
+)
+
+}
