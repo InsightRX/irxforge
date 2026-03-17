@@ -130,6 +130,53 @@ test_that("means + sd: length mismatch raises error", {
   )
 })
 
+test_that("means + sd: reorders sd to match means when both are named", {
+  mu  <- c(y = 50, x = 5)           # y first
+  sds <- c(x = 1,  y = 10)          # x first — should be reordered
+  out <- sample_covariates_mvtnorm(means = mu, sd = sds, n_subjects = 2000, seed = 7)
+  expect_named(out, c("y", "x"))
+  expect_equal(sd(out$y), 10, tolerance = 1.2)
+  expect_equal(sd(out$x),  1, tolerance = 0.12)
+})
+
+test_that("means + sd: name mismatch raises error", {
+  expect_error(
+    sample_covariates_mvtnorm(means = c(a = 1, b = 2), sd = c(a = 1, c = 2), n_subjects = 10),
+    "Names of `sd` must match"
+  )
+})
+
+test_that("means + sd: unnamed sd is assumed to be in the right order", {
+  mu  <- c(x = 5, y = 50)
+  out <- sample_covariates_mvtnorm(means = mu, sd = c(1, 10), n_subjects = 2000, seed = 7)
+  expect_named(out, c("x", "y"))
+  expect_equal(sd(out$x),  1, tolerance = 0.12)
+  expect_equal(sd(out$y), 10, tolerance = 1.2)
+})
+
+test_that("means + sigma: reorders sigma to match means when both are named", {
+  mu <- c(y = 20, x = 10)           # y first
+  S  <- matrix(c(4, 1, 1, 9), nrow = 2, dimnames = list(c("x","y"), c("x","y")))
+  out <- sample_covariates_mvtnorm(means = mu, sigma = S, n_subjects = 100, seed = 1)
+  expect_named(out, c("y", "x"))
+})
+
+test_that("means + sigma: name mismatch raises error", {
+  mu <- c(a = 1, b = 2)
+  S  <- matrix(c(1, 0, 0, 1), nrow = 2, dimnames = list(c("a","c"), c("a","c")))
+  expect_error(
+    sample_covariates_mvtnorm(means = mu, sigma = S, n_subjects = 10),
+    "Names of `sigma` must match"
+  )
+})
+
+test_that("means + sigma: unnamed sigma is assumed to be in the right order", {
+  mu <- c(x = 10, y = 20)
+  S  <- diag(2)                      # no dimnames
+  out <- sample_covariates_mvtnorm(means = mu, sigma = S, n_subjects = 100, seed = 1)
+  expect_named(out, c("x", "y"))
+})
+
 test_that("means without sigma or sd raises error", {
   expect_error(
     sample_covariates_mvtnorm(means = c(x = 1), n_subjects = 10),
