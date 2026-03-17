@@ -5,9 +5,13 @@
 \title{Sample covariates from multivariate normal distributions}
 \usage{
 sample_covariates_mvtnorm(
-  data,
+  data = NULL,
+  means = NULL,
+  sigma = NULL,
+  sd = NULL,
   cat_covs = NULL,
-  n_subjects = nrow(data),
+  n_subjects = if (!is.null(data)) nrow(data) else
+    stop("`n_subjects` must be specified when `data` is NULL."),
   exponential = FALSE,
   conditional = NULL,
   seed = NULL,
@@ -17,15 +21,32 @@ sample_covariates_mvtnorm(
 \arguments{
 \item{data}{data.frame (n x p) containing the original, observed,
 time-invariant covariates (ID should not be included) that will be used to
-inform the imputation.}
+inform the imputation. Can be \code{NULL} when \code{means} and either \code{sigma} or
+\code{sd} are supplied directly. Ignored with a warning when \code{means} is also
+provided.}
+
+\item{means}{named numeric vector of means for each covariate. When supplied,
+the distribution is specified directly and \code{data} is ignored. Must be
+supplied together with either \code{sigma} or \code{sd} when \code{data} is \code{NULL}.}
+
+\item{sigma}{numeric matrix (p x p) giving the full covariance matrix.
+Takes precedence over \code{sd} when both are provided. If both \code{sigma} and
+\code{means} are named, the matrix is reordered to match the order of \code{means};
+names must refer to the same set of variables.}
+
+\item{sd}{numeric vector of standard deviations. Used to construct a
+diagonal covariance matrix (\code{diag(sd^2)}) when \code{sigma} is not provided.
+If both \code{sd} and \code{means} are named, \code{sd} is reordered to match the order
+of \code{means}; names must refer to the same set of variables.}
 
 \item{cat_covs}{character vector containing the names of the categorical
 covariates in orgCovs.}
 
-\item{n_subjects}{number of simulated subjects, default is the number of
-subjects in the data.}
+\item{n_subjects}{number of simulated subjects. Defaults to \code{nrow(data)}
+when \code{data} is provided; required (no default) when \code{data} is \code{NULL}.}
 
-\item{exponential}{sample from exponential distribution? Default \code{FALSE}.}
+\item{exponential}{sample from exponential distribution? Default \code{FALSE}.
+Only applies when means/covariance are derived from \code{data}.}
 
 \item{conditional}{description...}
 
@@ -39,8 +60,26 @@ a data.frame with the simulated covariates, with \code{n_subjects}
 rows and \code{p} columns
 }
 \description{
-Sample covariates from multivariate normal distributions
+Samples from a multivariate normal distribution either derived from observed
+data or specified directly via \code{means} plus a covariance matrix (\code{sigma}) or
+standard deviations (\code{sd}).
 }
 \note{
 missing values in \code{data} must be coded as NA
+}
+\examples{
+sample_covariates_mvtnorm(
+  means = c(WT = 70, HT = 170, AGE = 50),
+  sd = c(10, 20, 5),
+  n_subjects = 100
+)
+sample_covariates_mvtnorm(
+  means = c(WT = 70, HT = 170, AGE = 50),
+  sigma = matrix(
+    c(100,  20,  12,
+      20,  400,  10,
+      12,   10,  25), nrow = 3, ncol = 3),
+  n_subjects = 100
+)
+
 }
