@@ -21,8 +21,11 @@ inform the imputation.}
 \item{n_subjects}{number of simulated subjects, default is the number of
 subjects in the data.}
 
-\item{conditional}{list with conditional limits for sampled population, e.g.
-\code{list("WT" = c(40, 60), "BMI" = c(15, 25))}.}
+\item{conditional}{list with conditional limits for sampled population. For
+continuous covariates, specify a numeric vector of length 2 giving the
+\code{c(min, max)} range, e.g. \code{list("WT" = c(40, 60), "BMI" = c(15, 25))}.
+For categorical covariates (those listed in \code{cat_covs}), specify a character
+vector of the allowed category values, e.g. \code{list("SEX" = c("F"))}.}
 
 \item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
 Default \code{NULL} does not set a seed.}

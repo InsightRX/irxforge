@@ -60,6 +60,23 @@ test_that("n_subjects controls the number of simulated rows", {
   expect_equal(nrow(out), 2)
 })
 
+test_that("conditional argument filters categorical covariates by value", {
+  dat <- data.frame(
+    AGE = c(20, 30, 40, 50, 60),
+    WT  = c(45, 55, 65, 75, 85),
+    SEX = c("M", "F", "F", "M", "F")
+  )
+  cndl <- list(SEX = c("F"))
+  out <- sample_covariates_mice(
+    data = dat,
+    cat_covs = "SEX",
+    conditional = cndl,
+    n_subjects = 5,
+    seed = 1
+  )
+  expect_true(all(as.character(out$SEX) == "F"))
+})
+
 test_that("conditional argument filters data before sampling", {
   dat <- data.frame(
     AGE = c(20, 30, 40, 50, 60),

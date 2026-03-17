@@ -1,5 +1,9 @@
 #' Sample covariates using multivariate imputation using chained equations
 #' (mice)
+#' 
+#' In contrast to sampling methods bootstrap and NHANES, categorical covariates
+#' need to be specified using the `cat_covs` argument, otherwise they will be 
+#' treated as continuous.
 #'
 #' @param data data.frame (n x p) containing the original, observed,
 #' time-invariant covariates (ID should not be included) that will be used to
@@ -8,8 +12,11 @@
 #' covariates in orgCovs.
 #' @param n_subjects number of simulated subjects, default is the number of
 #' subjects in the data.
-#' @param conditional list with conditional limits for sampled population, e.g. 
-#' `list("WT" = c(40, 60), "BMI" = c(15, 25))`.
+#' @param conditional list with conditional limits for sampled population. For
+#' continuous covariates, specify a numeric vector of length 2 giving the
+#' `c(min, max)` range, e.g. `list("WT" = c(40, 60), "BMI" = c(15, 25))`.
+#' For categorical covariates (those listed in `cat_covs`), specify a character
+#' vector of the allowed category values, e.g. `list("SEX" = c("F"))`.
 #' @param cont_method method used to predict continuous covariates within mice,
 #' default is `pmm`.
 #' @param replicates number of multiple imputations replicates to sample.
@@ -61,11 +68,15 @@ sample_covariates_mice <- function(
     seed_covs <- names(conditional)
     pool_seed <- data
     for(key in seed_covs) {
-      pool_seed <- dplyr::filter(
-        pool_seed,
-        .data[[key]] >= min(conditional[[key]]) & 
-        .data[[key]] <= max(conditional[[key]])
-      ) 
+      if(key %in% cat_covs) {
+        pool_seed <- dplyr::filter(pool_seed, .data[[key]] %in% conditional[[key]])
+      } else {
+        pool_seed <- dplyr::filter(
+          pool_seed,
+          .data[[key]] >= min(conditional[[key]]) &
+          .data[[key]] <= max(conditional[[key]])
+        )
+      }
     }
     mi_data[seed_covs] <- pool_seed[
       sample(1:nrow(pool_seed), n_subjects, replace = T), seed_covs

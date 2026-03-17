@@ -23,5 +23,10 @@ Default \code{NULL} does not set a seed.}
 data.frame with covariates in each column
 }
 \description{
-Sample covariates using a variety of methods
+Categorical covariates: all covariate sampling methods (except multi-variate
+normal) support sampling of categorical covariates as well as continuous.
+In the \code{mice} sampling method, the categorical covariates have to be
+provided specifically as a vector of \code{character} indicating the column names.
+If not provided, they will otherwise be treated as continuous variables and
+non-integer values may be sampled.
 }
