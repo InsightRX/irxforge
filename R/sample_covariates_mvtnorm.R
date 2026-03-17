@@ -12,12 +12,10 @@
 #' @param means named numeric vector of means for each covariate. When supplied,
 #' the distribution is specified directly and `data` is ignored. Must be
 #' supplied together with either `sigma` or `sd` when `data` is `NULL`.
-#' @param sigma named numeric matrix (p x p) giving the full covariance matrix.
-#' Takes precedence over `sd` when both are provided. Column and row names
-#' must match the names in `means`.
-#' @param sd named numeric vector of standard deviations. Used to construct a
+#' @param sigma numeric matrix (p x p) giving the full covariance matrix.
+#' Takes precedence over `sd` when both are provided.
+#' @param sd numeric vector of standard deviations. Used to construct a
 #' diagonal covariance matrix (`diag(sd^2)`) when `sigma` is not provided.
-#' Names must match the names in `means`.
 #' @param cat_covs character vector containing the names of the categorical
 #' covariates in orgCovs.
 #' @param n_subjects number of simulated subjects. Defaults to `nrow(data)`
@@ -74,49 +72,17 @@ sample_covariates_mvtnorm <- function(
     }
     if (!is.null(sigma)) {
       cov_mat <- sigma
-      # Validate dimensions of `sigma` against `means`
-      if (!is.matrix(cov_mat)) {
-        stop("`sigma` must be a covariance matrix when `means` is supplied.")
-      }
-      if (nrow(cov_mat) != length(means) || ncol(cov_mat) != length(means)) {
-        stop("Dimensions of `sigma` must match the length of `means`.")
-      }
-      mean_names <- names(means)
-      row_nms <- rownames(cov_mat)
-      col_nms <- colnames(cov_mat)
-      if (!is.null(mean_names)) {
-        if (is.null(row_nms) || is.null(col_nms)) {
-          stop("When `means` is named, `sigma` must have row and column names.")
-        }
-        if (!setequal(row_nms, mean_names) || !setequal(col_nms, mean_names)) {
-          stop("Names of `sigma` must match `names(means)` (same set of names).")
-        }
-        # Reorder covariance matrix to match the order of `names(means)`
-        cov_mat <- cov_mat[mean_names, mean_names, drop = FALSE]
-      }
     } else {
       if (length(sd) != length(means)) {
         stop("`sd` must have the same length as `means`.")
       }
-      mean_names <- names(means)
-      sd_names <- names(sd)
-      # If both `sd` and `means` are named, validate and reorder `sd`
-      if (!is.null(sd_names) && !is.null(mean_names)) {
-        if (!setequal(sd_names, mean_names)) {
-          stop("Names of `sd` must match `names(means)` (same set of names).")
-        }
-        sd <- sd[mean_names]
-      } else if (!is.null(sd_names) && is.null(mean_names)) {
-        # Drop names to avoid relying on an arbitrary ordering when `means` is unnamed
-        sd <- unname(sd)
-      }
       cov_mat <- diag(sd^2)
-      if (!is.null(mean_names)) {
-        rownames(cov_mat) <- mean_names
-        colnames(cov_mat) <- mean_names
-      } else if (!is.null(names(sd))) {
+      if (!is.null(names(sd))) {
         rownames(cov_mat) <- names(sd)
         colnames(cov_mat) <- names(sd)
+      } else if (!is.null(names(means))) {
+        rownames(cov_mat) <- names(means)
+        colnames(cov_mat) <- names(means)
       }
     }
     out <- mvtnorm::rmvnorm(

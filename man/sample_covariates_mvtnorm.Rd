@@ -29,13 +29,11 @@ provided.}
 the distribution is specified directly and \code{data} is ignored. Must be
 supplied together with either \code{sigma} or \code{sd} when \code{data} is \code{NULL}.}
 
-\item{sigma}{named numeric matrix (p x p) giving the full covariance matrix.
-Takes precedence over \code{sd} when both are provided. Column and row names
-must match the names in \code{means}.}
+\item{sigma}{numeric matrix (p x p) giving the full covariance matrix.
+Takes precedence over \code{sd} when both are provided.}
 
-\item{sd}{named numeric vector of standard deviations. Used to construct a
-diagonal covariance matrix (\code{diag(sd^2)}) when \code{sigma} is not provided.
-Names must match the names in \code{means}.}
+\item{sd}{numeric vector of standard deviations. Used to construct a
+diagonal covariance matrix (\code{diag(sd^2)}) when \code{sigma} is not provided.}
 
 \item{cat_covs}{character vector containing the names of the categorical
 covariates in orgCovs.}
