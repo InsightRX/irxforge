@@ -1,7 +1,8 @@
 # Sample covariates using multivariate imputation using chained equations (mice)
 
-Sample covariates using multivariate imputation using chained equations
-(mice)
+In contrast to sampling methods bootstrap and NHANES, categorical
+covariates need to be specified using the `cat_covs` argument, otherwise
+they will be treated as continuous.
 
 ## Usage
 
@@ -33,8 +34,12 @@ sample_covariates_mice(
 
 - conditional:
 
-  list with conditional limits for sampled population, e.g.
-  `list("WT" = c(40, 60), "BMI" = c(15, 25))`.
+  list with conditional limits for sampled population. For continuous
+  covariates, specify a numeric vector of length 2 giving the
+  `c(min, max)` range, e.g. `list("WT" = c(40, 60), "BMI" = c(15, 25))`.
+  For categorical covariates (those listed in `cat_covs`), specify a
+  character vector of the allowed category values, e.g.
+  `list("SEX" = c("F"))`.
 
 - n_subjects:
 

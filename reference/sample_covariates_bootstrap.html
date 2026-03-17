@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9001</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9002</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,8 +64,11 @@ subjects in the data.</p></dd>
 
 
 <dt id="arg-conditional">conditional<a class="anchor" aria-label="anchor" href="#arg-conditional"></a></dt>
-<dd><p>list with conditional limits for sampled population, e.g.
-<code>list("WT" = c(40, 60), "BMI" = c(15, 25))</code>.</p></dd>
+<dd><p>list with conditional limits for sampled population. For
+continuous covariates, specify a numeric vector of length 2 giving the
+<code>c(min, max)</code> range, e.g. <code>list("WT" = c(40, 60), "BMI" = c(15, 25))</code>.
+For categorical covariates (those listed in <code>cat_covs</code>), specify a character
+vector of the allowed category values, e.g. <code>list("SEX" = c("F"))</code>.</p></dd>
 
 
 <dt id="arg-seed">seed<a class="anchor" aria-label="anchor" href="#arg-seed"></a></dt>
