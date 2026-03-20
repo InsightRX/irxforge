@@ -1,8 +1,8 @@
 # Sample covariates from multivariate normal distributions
 
 Samples from a multivariate normal distribution either derived from
-observed data or specified directly via `means` plus a covariance matrix
-(`sigma`) or standard deviations (`sd`).
+observed `data` or specified directly via `means` plus a covariance
+matrix (`sigma`) or standard deviations (`sd`).
 
 ## Usage
 
@@ -85,6 +85,17 @@ sample_covariates_mvtnorm(
 
 a data.frame with the simulated covariates, with `n_subjects` rows and
 `p` columns
+
+## Details
+
+The `conditional`
+argument`can be specified only when data is used as input (and not with`means`and`sigma
+or ``` sd``). If  ```conditional``  is used in conjuction with `data ``,
+it will first downsample the provided dataset to include only patients
+that match the conditional. After that, it will get the covariance
+matrix from the downsampled dataset, and draw samples from it. It is
+therefore possible that, in contrast to e.g. bootstrap sampling, samples
+are drawn that are outside of the min/max given in the conditional.
 
 ## Note
 
