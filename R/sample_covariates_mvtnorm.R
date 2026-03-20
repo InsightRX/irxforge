@@ -1,8 +1,16 @@
 #' Sample covariates from multivariate normal distributions
 #'
 #' Samples from a multivariate normal distribution either derived from observed
-#' data or specified directly via `means` plus a covariance matrix (`sigma`) or
-#' standard deviations (`sd`).
+#' `data` or specified directly via `means` plus a covariance matrix (`sigma`) 
+#' or standard deviations (`sd`).
+#' 
+#' The `conditional` argument` can be specified only when data is used as input 
+#' (and not with `means` and `sigma or `sd``). If `conditional`` is used in 
+#' conjuction with `data``, it will first downsample the provided dataset to 
+#' include only patients that match the conditional. After that, it will get 
+#' the covariance matrix from the downsampled dataset, and draw samples from 
+#' it. It is therefore possible that, in contrast to e.g. bootstrap sampling, 
+#' samples are drawn that are outside of the min/max given in the conditional.
 #'
 #' @param data data.frame (n x p) containing the original, observed,
 #' time-invariant covariates (ID should not be included) that will be used to
@@ -70,6 +78,9 @@ sample_covariates_mvtnorm <- function(
   if (!is.null(means)) {
     if (!is.null(data)) {
       warning("`data` is ignored when `means` is provided.")
+    }
+    if(!is.null(conditional)) {
+      warning("`conditional` is ignored when `means` is provided.")
     }
     if (is.null(sigma) && is.null(sd)) {
       stop("When `means` is supplied, either `sigma` or `sd` must also be provided.")
