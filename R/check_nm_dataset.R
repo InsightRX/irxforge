@@ -336,10 +336,12 @@ check_nm_dataset <- function(
       dv <- get_col("DV")
       evid <- get_col("EVID")
       obs <- evid == 0
-      expected_mdv <- ifelse(is.na(dv[obs]), 1, 0)
+      # Treat NA and DV <= 0 as missing/BLQ → MDV should be 1;
+      # DV > 0 → MDV should be 0
+      expected_mdv <- ifelse(is.na(dv[obs]) | dv[obs] <= 0, 1, 0)
       log_check(
         "mdv_dv_consistent",
-        "MDV is consistent with is.na(DV) for observation records (EVID 0)",
+        "MDV matches DV for observations: MDV=1 when DV is NA or <= 0 (BLQ), MDV=0 when DV > 0",
         if (all(mdv[obs] == expected_mdv, na.rm = TRUE)) "PASS" else "FAIL"
       )
       dosing <- evid %in% c(1, 4)
@@ -351,14 +353,14 @@ check_nm_dataset <- function(
     }
     if (has_col("DV") && is.numeric(get_col("DV"))) {
       dv <- get_col("DV")
-      nonmissing_obs <- !is.na(dv) & dv != 0
+      valid_obs <- !is.na(dv) & dv > 0
       if (has_col("EVID")) {
-        nonmissing_obs <- nonmissing_obs & get_col("EVID") == 0
+        valid_obs <- valid_obs & get_col("EVID") == 0
       }
       log_check(
         "mdv_nonmissing_obs",
-        "MDV is 0 for non-missing observation records (DV > 0)",
-        if (all(mdv[nonmissing_obs] == 0, na.rm = TRUE)) "PASS" else "FAIL"
+        "MDV is 0 for valid observation records (DV > 0)",
+        if (all(mdv[valid_obs] == 0, na.rm = TRUE)) "PASS" else "FAIL"
       )
     }
   }
@@ -408,22 +410,6 @@ check_nm_dataset <- function(
         if (!any(is.na(amt[dose_recs]))) "PASS" else "FAIL"
       )
     }
-  }
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # DV / MDV / BLQ consistency
-  # ──────────────────────────────────────────────────────────────────────────
-  if (has_col("DV") && has_col("MDV") && has_col("EVID") && is.numeric(get_col("DV"))) {
-    dv <- get_col("DV")
-    mdv <- get_col("MDV")
-    evid <- get_col("EVID")
-    obs <- evid == 0
-    dv_leq_zero <- obs & !is.na(dv) & dv <= 0
-    log_check(
-      "dv_leq_zero_mdv",
-      "DV <= 0 observations have MDV = 1 (or BLQ flag)",
-      if (sum(dv_leq_zero) == 0 || all(mdv[dv_leq_zero] == 1)) "PASS" else "FAIL"
-    )
   }
 
   # ──────────────────────────────────────────────────────────────────────────

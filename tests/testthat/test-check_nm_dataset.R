@@ -108,11 +108,28 @@ test_that("DV present for dosing records is flagged", {
   expect_equal(res$result[res$check == "dv_missing_dose"], "FAIL")
 })
 
-test_that("MDV consistency is checked", {
+test_that("MDV = 1 for valid observation (DV > 0) is flagged", {
   d <- make_nm()
-  d$MDV[2] <- 1  # observation with non-missing DV should have MDV = 0
+  d$MDV[2] <- 1  # observation with DV > 0 should have MDV = 0
   res <- check_nm_dataset(d, verbose = FALSE)
   expect_equal(res$result[res$check == "mdv_nonmissing_obs"], "FAIL")
+  expect_equal(res$result[res$check == "mdv_dv_consistent"], "FAIL")
+})
+
+test_that("MDV/DV consistency treats DV <= 0 as BLQ (MDV should be 1)", {
+  d <- make_nm()
+  # Set an observation DV to a negative value (e.g. log-transformed BLQ)
+  # and MDV = 0 — this should FAIL because DV <= 0 requires MDV = 1
+  d$DV[2] <- -2
+  d$MDV[2] <- 0
+  res <- check_nm_dataset(d, verbose = FALSE)
+  expect_equal(res$result[res$check == "mdv_dv_consistent"], "FAIL")
+
+  # Now set MDV = 1 for the BLQ record — should PASS
+  d$MDV[2] <- 1
+  res2 <- check_nm_dataset(d, verbose = FALSE)
+  expect_equal(res2$result[res2$check == "mdv_dv_consistent"], "PASS")
+  expect_equal(res2$result[res2$check == "mdv_nonmissing_obs"], "PASS")
 })
 
 test_that("exclusion flag checks", {
