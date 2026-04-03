@@ -3,6 +3,8 @@
 #' @param data list containing data.frames with SDTM domains
 #' @param dictionary a data dictionary that maps expected variable names to 
 #' variables in the data.
+#' @param na what to set NA values to. E.g. ".", (default) or NA (keep NA),
+#' or NULL (do nothing).
 #'
 #' @returns data.frame with population PK input data in NONMEM-style
 #' format. It will also add the non-standard columns ROUTE ("oral", "iv") and 
@@ -12,7 +14,8 @@
 #' @export
 reformat_data_sdtm_to_modeling <- function(
   data, 
-  dictionary
+  dictionary,
+  na = "."
 ) {
   
   ## Parse into modeling dataset (NONMEM-style format)
@@ -28,31 +31,56 @@ reformat_data_sdtm_to_modeling <- function(
   for(key in names(data)) { # admiral package is written assuming uppercase column names
     names(data[[key]]) <- toupper(names(data[[key]]))
   }
-  
+
+  # Derive ADSL from DM when ADSL is not provided
+  if(is.null(data$adsl) && !is.null(data$dm)) {
+    data$adsl <- data$dm %>%
+      dplyr::mutate(
+        TRTSDTM = admiral::convert_dtc_to_dtm(
+          .data$RFXSTDTC,
+          highest_imputation = "h"
+        ),
+        TRTSDT = as.Date(.data$TRTSDTM),
+        TRT01P = .data$ARM,
+        TRT01A = .data$ACTARM
+      )
+  }
+
+  # Build param_lookup dynamically from PC data
+  pc_testcds <- unique(toupper(data$pc$PCTESTCD))
+  pc_testcds <- pc_testcds[!is.na(pc_testcds)]
   param_lookup <- data.frame(
-    PCTESTCD = c("DRUGX", "DOSE"),
-    PARAMCD = c("DRUGX", "DOSE"),
-    PARAM = c("concentration of DrugX", "DrugX Dose"),
-    PARAMN = c(1, 2)
+    PCTESTCD = c(pc_testcds, "DOSE"),
+    PARAMCD = c(pc_testcds, "DOSE"),
+    PARAM = c(
+      paste("concentration of", pc_testcds),
+      paste(pc_testcds[1], "Dose")
+    ),
+    PARAMN = seq_len(length(pc_testcds) + 1)
   )
-  
+
   # Get list of ADSL vars required for derivations
   adsl_vars <- syms_to_exprs(c("TRTSDT", "TRTSDTM", "TRT01P", "TRT01A"))
   
   ## Concentrations
-  pc_dates <- data$pc %>%
-    # Join ADSL with PC (need TRTSDT for ADY derivation)
-    admiral::derive_vars_merged(
-      dataset_add = data$adsl,
-      new_vars = adsl_vars,
-      by_vars = syms_to_exprs(c("STUDYID", "USUBJID"))
-    ) %>%
+  pc_dates <- data$pc 
+  if(!is.null(data$adsl)) {
+    pc_dates <- pc_dates %>%
+      # Join ADSL with PC (need TRTSDT for ADY derivation)
+      admiral::derive_vars_merged(
+        dataset_add = data$adsl,
+        new_vars = adsl_vars,
+        by_vars = syms_to_exprs(c("STUDYID", "USUBJID"))
+      )  
+  }
+  pc_dates <- pc_dates %>%
     # Derive analysis date/time
     # Impute missing time to 00:00:00
     admiral::derive_vars_dtm(
       new_vars_prefix = "A",
       dtc = !!rlang::sym("PCDTC"),
-      time_imputation = "00:00:00"
+      time_imputation = "00:00:00",
+      ignore_seconds_flag = FALSE
     ) %>%
     # Derive dates and times from date/times
     admiral::derive_vars_dtm_to_dt(syms_to_exprs(c("ADTM"))) %>%
@@ -68,12 +96,16 @@ reformat_data_sdtm_to_modeling <- function(
     )
   
   ## Doses
-  ex_dates <- data$ex %>%
-    admiral::derive_vars_merged(
-      dataset_add = data$adsl,
-      new_vars = adsl_vars,
-      by_vars = syms_to_exprs(c("STUDYID", "USUBJID"))
-    ) %>%
+  ex_dates <- data$ex
+  if(!is.null(data$adsl)) {
+    ex_dates <- ex_dates %>%
+      admiral::derive_vars_merged(
+        dataset_add = data$adsl,
+        new_vars = adsl_vars,
+        by_vars = syms_to_exprs(c("STUDYID", "USUBJID"))
+      )
+  }
+  ex_dates <- ex_dates %>%
     # Keep records with nonzero dose
     dplyr::filter(.data$EXDOSE > 0) %>%
     # Add time and set missing end date to start date
@@ -83,12 +115,14 @@ reformat_data_sdtm_to_modeling <- function(
     admiral::derive_vars_dtm(
       new_vars_prefix = "AST",
       dtc = !!rlang::sym("EXSTDTC"),
-      time_imputation = "00:00:00"
+      time_imputation = "00:00:00",
+      ignore_seconds_flag = FALSE
     ) %>%
     admiral::derive_vars_dtm(
       new_vars_prefix = "AEN",
       dtc = !!rlang::sym("EXENDTC"),
-      time_imputation = "00:00:00"
+      time_imputation = "00:00:00",
+      ignore_seconds_flag = FALSE
     ) %>%
     # Derive event ID and nominal relative time from first dose (NFRLT)
     dplyr::mutate(
@@ -120,8 +154,8 @@ reformat_data_sdtm_to_modeling <- function(
       keep_source_vars = syms_to_exprs(c(
         "STUDYID", "USUBJID", "EVID", "EXDOSFRQ", "EXDOSFRM",
         "NFRLT", "EXDOSE", "EXDOSU", "EXTRT", "ASTDT", "ASTDTM", "AENDT", "AENDTM",
-        "VISIT", "VISITNUM", "VISITDY", "EXROUTE", "EXDOSFRM",
-        "TRT01A", "TRT01P", "DOMAIN", "EXSEQ", !!!adsl_vars
+        "VISIT", "VISITNUM", "VISITDY", "EXROUTE",
+        "TRT01A", "TRT01P", "TRTSDT", "TRTSDTM", "DOMAIN", "EXSEQ"
       ))
     ) %>%
     # Derive AVISIT based on nominal relative time
@@ -373,56 +407,64 @@ reformat_data_sdtm_to_modeling <- function(
     )
   
   #---- Derive additional baselines from VS and LB ----
-  numeric_vars <- c("CREAT", "ALT", "AST", "BILI") ## TODO: fairly generic, but might not always be available or might include others
-  labsbl <- data$lb %>%
-    dplyr::filter(.data$LBBLFL == "Y" & .data$LBTESTCD %in% numeric_vars) %>%
-    dplyr::mutate(LBTESTCDB = paste0(.data$LBTESTCD, "BL")) %>%
-    dplyr::select("STUDYID", "USUBJID", "LBTESTCDB", "LBSTRESN")
-  
-  covar_vslb <- covar %>%
-    admiral::derive_vars_merged(
-      dataset_add = data$vs,
-      filter_add = !!rlang::sym("VSTESTCD") == "HEIGHT",
-      by_vars = syms_to_exprs(c("STUDYID", "USUBJID")),
-      new_vars = syms_to_exprs(c("HTBL" = "VSSTRESN"))
-    ) %>%
-    admiral::derive_vars_merged(
-      dataset_add = data$vs,
-      filter_add = !!rlang::sym("VSTESTCD") == "WEIGHT" & !!rlang::sym("VSBLFL") == "Y",
-      by_vars = syms_to_exprs(c("STUDYID", "USUBJID")),
-      new_vars = syms_to_exprs(c(WTBL = "VSSTRESN"))
-    ) %>%
-    admiral::derive_vars_transposed(
-      dataset_merge = labsbl,
-      by_vars = syms_to_exprs(c("STUDYID", "USUBJID")),
-      key_var = !!rlang::sym("LBTESTCDB"),
-      value_var = !!rlang::sym("LBSTRESN")
-    ) %>%
-    dplyr::mutate(
-      BMIBL = admiral::compute_bmi(height = .data$HTBL, weight = .data$WTBL),
-      BSABL = admiral::compute_bsa(
-        height = .data$HTBL,
-        weight = .data$WTBL,
-        method = "Mosteller"
-      ),
-      CRCLBL = admiral::compute_egfr(
-        creat = .data$CREATBL,
-        creatu = "SI",
-        age = .data$AGE,
-        weight = .data$WTBL,
-        sex = .data$SEX,
-        method = "CRCL"
-      ), 
-      EGFRBL = admiral::compute_egfr(
-        creat = .data$CREATBL,
-        creatu = "SI",
-        age = .data$AGE,
-        weight = .data$WTBL,
-        sex = .data$SEX,
-        method = "CKD-EPI"
+  covar_vslb <- covar
+  if(!is.null(data$vs)) {
+    covar_vslb <- covar_vslb %>%
+      admiral::derive_vars_merged(
+        dataset_add = data$vs,
+        filter_add = !!rlang::sym("VSTESTCD") == "HEIGHT",
+        by_vars = syms_to_exprs(c("STUDYID", "USUBJID")),
+        new_vars = syms_to_exprs(c("HTBL" = "VSSTRESN"))
+      ) %>%
+      admiral::derive_vars_merged(
+        dataset_add = data$vs,
+        filter_add = !!rlang::sym("VSTESTCD") == "WEIGHT" & !!rlang::sym("VSBLFL") == "Y",
+        by_vars = syms_to_exprs(c("STUDYID", "USUBJID")),
+        new_vars = syms_to_exprs(c(WTBL = "VSSTRESN"))
       )
-    ) %>%
-    dplyr::rename(TBILBL = "BILIBL")
+  }
+  if(!is.null(data$lb)) {
+    numeric_vars <- c("CREAT", "ALT", "AST", "BILI")
+    labsbl <- data$lb %>%
+      dplyr::filter(.data$LBBLFL == "Y" & .data$LBTESTCD %in% numeric_vars) %>%
+      dplyr::mutate(LBTESTCDB = paste0(.data$LBTESTCD, "BL")) %>%
+      dplyr::select("STUDYID", "USUBJID", "LBTESTCDB", "LBSTRESN")
+    covar_vslb <- covar_vslb %>%
+      admiral::derive_vars_transposed(
+        dataset_merge = labsbl,
+        by_vars = syms_to_exprs(c("STUDYID", "USUBJID")),
+        key_var = !!rlang::sym("LBTESTCDB"),
+        value_var = !!rlang::sym("LBSTRESN")
+      )
+  }
+  if(!is.null(data$vs) && !is.null(data$lb)) {
+    covar_vslb <- covar_vslb %>%
+      dplyr::mutate(
+        BMIBL = admiral::compute_bmi(height = .data$HTBL, weight = .data$WTBL),
+        BSABL = admiral::compute_bsa(
+          height = .data$HTBL,
+          weight = .data$WTBL,
+          method = "Mosteller"
+        ),
+        CRCLBL = admiral::compute_egfr(
+          creat = .data$CREATBL,
+          creatu = "SI",
+          age = .data$AGE,
+          weight = .data$WTBL,
+          sex = .data$SEX,
+          method = "CRCL"
+        ),
+        EGFRBL = admiral::compute_egfr(
+          creat = .data$CREATBL,
+          creatu = "SI",
+          age = .data$AGE,
+          weight = .data$WTBL,
+          sex = .data$SEX,
+          method = "CKD-EPI"
+        )
+      ) %>%
+      dplyr::rename(TBILBL = "BILIBL")
+  }
   
   # Combine covariates with APPPK data
   adppk <- adppk_aseq %>%
@@ -434,6 +476,11 @@ reformat_data_sdtm_to_modeling <- function(
     dplyr::mutate(RECSEQ = dplyr::row_number()) %>%
     dplyr::mutate(ROUTE = tolower(.data$ROUTE), FORM = tolower(.data$FORM))
   
+  # Ensure WT column exists even if VS data was not provided
+  if(!"WTBL" %in% names(adppk)) {
+    adppk$WTBL <- NA_real_
+  }
+
   poppk_data <- adppk %>% # select the variables we need from the data
     dplyr::select(
       ID = "SUBJID",
@@ -454,8 +501,14 @@ reformat_data_sdtm_to_modeling <- function(
       "RACE",
       "ETHNIC",
       "COUNTRY"
-    ) %>% 
-    dplyr::filter(!(is.na(.data$DV) & .data$EVID == 0)) # filter out DV=0 at time==0
+    ) %>%
+    dplyr::filter(!(is.na(.data$DV) & .data$EVID == 0)) # filter out observation rows with missing DV
+  
+  ## Convert NA's to dots (or something else)
+  if(!is.null(na)) {
+    poppk_data <- poppk_data |>
+      dplyr::mutate(dplyr::across(dplyr::everything(), ~ifelse(is.na(.) | . == "NA", na, .)))
+  }
   
   poppk_data
 }
