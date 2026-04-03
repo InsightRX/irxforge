@@ -16,6 +16,13 @@ make_nm <- function(n_id = 2, n_obs = 3) {
   }))
 }
 
+# Helper: dataset with renamed columns (for dictionary tests)
+make_nm_renamed <- function(n_id = 2, n_obs = 3) {
+  d <- make_nm(n_id = n_id, n_obs = n_obs)
+  names(d) <- c("SUBJ", "TAD", "CONC", "MISS", "FLAG", "DOSE", "COMP")
+  d
+}
+
 test_that("clean dataset passes all applicable checks", {
   d <- make_nm()
   res <- check_nm_dataset(d, verbose = FALSE)
@@ -229,4 +236,88 @@ test_that("duplicate records are flagged", {
   d <- rbind(d, d[2, ])  # duplicate observation record
   res <- check_nm_dataset(d, verbose = FALSE)
   expect_equal(res$result[res$check == "unique_records"], "FAIL")
+})
+
+# ── Dictionary tests ──────────────────────────────────────────────────────────
+
+test_that("dictionary maps renamed columns and passes clean dataset", {
+  d <- make_nm_renamed()
+  dict <- list(
+    ID = "SUBJ", TIME = "TAD", DV = "CONC", MDV = "MISS",
+    EVID = "FLAG", AMT = "DOSE", CMT = "COMP"
+  )
+  res <- check_nm_dataset(d, dictionary = dict, verbose = FALSE)
+  # All applicable checks should pass (or be NA), none should fail
+  expect_true(all(res$result %in% c("PASS", "NA")))
+})
+
+test_that("dictionary resolves required columns correctly", {
+  # Without dictionary, renamed dataset fails required_cols
+  d <- make_nm_renamed()
+  res_no_dict <- check_nm_dataset(d, verbose = FALSE)
+  expect_equal(res_no_dict$result[res_no_dict$check == "required_cols"], "FAIL")
+
+  # With dictionary, it passes
+  dict <- list(ID = "SUBJ", TIME = "TAD", DV = "CONC")
+  res_dict <- check_nm_dataset(d, dictionary = dict, verbose = FALSE)
+  expect_equal(res_dict$result[res_dict$check == "required_cols"], "PASS")
+})
+
+test_that("dictionary catches errors in renamed columns", {
+  d <- make_nm_renamed()
+  d$TAD[2] <- -1  # negative TIME (via TAD)
+  dict <- list(
+    ID = "SUBJ", TIME = "TAD", DV = "CONC", MDV = "MISS",
+    EVID = "FLAG", AMT = "DOSE", CMT = "COMP"
+  )
+  res <- check_nm_dataset(d, dictionary = dict, verbose = FALSE)
+  expect_equal(res$result[res$check == "time_nonneg"], "FAIL")
+})
+
+test_that("dictionary works for AMT/EVID consistency", {
+  d <- make_nm_renamed()
+  d$DOSE[3] <- 50  # AMT > 0 for an observation (EVID = 0)
+  dict <- list(
+    ID = "SUBJ", TIME = "TAD", DV = "CONC", MDV = "MISS",
+    EVID = "FLAG", AMT = "DOSE", CMT = "COMP"
+  )
+  res <- check_nm_dataset(d, dictionary = dict, verbose = FALSE)
+  expect_equal(res$result[res$check == "amt_zero_obs"], "FAIL")
+  expect_equal(res$result[res$check == "amt_evid_consistent"], "FAIL")
+})
+
+test_that("partial dictionary works (unmapped columns keep standard names)", {
+  d <- make_nm()
+  names(d)[1] <- "SUBJ"  # only rename ID
+  dict <- list(ID = "SUBJ")
+  res <- check_nm_dataset(d, dictionary = dict, verbose = FALSE)
+  expect_equal(res$result[res$check == "required_cols"], "PASS")
+  expect_true(all(res$result %in% c("PASS", "NA")))
+})
+
+test_that("dictionary is case-insensitive for keys", {
+  d <- make_nm_renamed()
+  dict <- list(
+    id = "SUBJ", time = "TAD", dv = "CONC", mdv = "MISS",
+    evid = "FLAG", amt = "DOSE", cmt = "COMP"
+  )
+  res <- check_nm_dataset(d, dictionary = dict, verbose = FALSE)
+  expect_equal(res$result[res$check == "required_cols"], "PASS")
+})
+
+test_that("unknown dictionary keys produce a warning", {
+  d <- make_nm()
+  expect_warning(
+    check_nm_dataset(d, dictionary = list(FOOBAR = "X"), verbose = FALSE),
+    "not recognised"
+  )
+})
+
+test_that("dictionary verbose output shows mapping", {
+  d <- make_nm()
+  names(d)[1] <- "SUBJ"
+  expect_message(
+    check_nm_dataset(d, dictionary = list(ID = "SUBJ"), verbose = TRUE),
+    "Dictionary mapping: ID -> SUBJ"
+  )
 })

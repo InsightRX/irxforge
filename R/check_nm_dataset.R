@@ -5,6 +5,13 @@
 #' issues are reported as rows in the output table.
 #'
 #' @param data a data.frame (or tibble) containing the NONMEM dataset to check.
+#' @param dictionary an optional named list that maps standard NONMEM column
+#'   names to the actual column names in `data`. For example,
+#'   `list(ID = "NMID", TIME = "TAD")` means the column called `"NMID"` in
+#'   `data` plays the role of `ID`, and `"TAD"` plays the role of `TIME`.
+#'   Any standard name not listed in the dictionary is assumed to match the
+#'   column name in `data` as-is. Supported keys: `ID`, `TIME`, `DV`, `MDV`,
+#'   `EVID`, `AMT`, `CMT`, `RATE`, `SS`, `ADDL`, `II`.
 #' @param exclusion_flag character name of the column used as an exclusion flag
 #'   (for `$DATA ACCEPT` / `IGNORE` in NONMEM). If `NULL` (default), the
 #'   exclusion-flag check is skipped.
@@ -25,12 +32,50 @@
 #' @export
 check_nm_dataset <- function(
   data,
+  dictionary = NULL,
   exclusion_flag = NULL,
   max_digits = 10,
   max_id_digits = 5,
   extra_reserved = NULL,
   verbose = TRUE
 ) {
+
+  # ──────────────────────────────────────────────────────────────────────────
+
+  # Resolve dictionary: map standard NONMEM names → actual column names
+
+  # ──────────────────────────────────────────────────────────────────────────
+  nm_keys <- c("ID", "TIME", "DV", "MDV", "EVID", "AMT", "CMT",
+               "RATE", "SS", "ADDL", "II")
+  col_map <- stats::setNames(nm_keys, nm_keys)          # default: name == column
+  if (!is.null(dictionary)) {
+    dict_upper <- stats::setNames(
+      as.character(dictionary),
+      toupper(names(dictionary))
+    )
+    unknown <- setdiff(names(dict_upper), nm_keys)
+    if (length(unknown) > 0) {
+      warning(
+        "Dictionary keys not recognised (ignored): ",
+        paste(unknown, collapse = ", ")
+      )
+    }
+    for (k in intersect(names(dict_upper), nm_keys)) {
+      col_map[[k]] <- dict_upper[[k]]
+    }
+    if (verbose) {
+      mapped <- col_map[col_map != names(col_map)]
+      if (length(mapped) > 0) {
+        message(
+          "Dictionary mapping: ",
+          paste(names(mapped), "->", mapped, collapse = ", ")
+        )
+      }
+    }
+  }
+
+  # Helper: resolve a standard NONMEM name to its actual column name
+  col_for <- function(nm_name) col_map[[nm_name]]
 
   results <- data.frame(
     check = character(0),
@@ -47,18 +92,22 @@ check_nm_dataset <- function(
     results[nrow(results) + 1, ] <<- list(check, description, result)
   }
 
-  has_col <- function(col) col %in% names(data)
+  # Column accessor helpers — all use dictionary-resolved names
+  has_col <- function(nm_name) col_for(nm_name) %in% names(data)
+  get_col <- function(nm_name) data[[col_for(nm_name)]]
   cols <- toupper(names(data))
 
   # ──────────────────────────────────────────────────────────────────────────
-
   # Required columns
   # ──────────────────────────────────────────────────────────────────────────
   required <- c("ID", "TIME", "DV")
-  present <- required %in% cols
+  present <- vapply(required, function(k) col_for(k) %in% names(data), logical(1))
   log_check(
     "required_cols",
-    paste0("Minimum required columns present (", paste(required, collapse = ", "), ")"),
+    paste0(
+      "Minimum required columns present (",
+      paste(vapply(required, col_for, character(1)), collapse = ", "), ")"
+    ),
     if (all(present)) "PASS" else "FAIL"
   )
 
@@ -138,7 +187,7 @@ check_nm_dataset <- function(
   # Exclusion flag
   # ──────────────────────────────────────────────────────────────────────────
   if (!is.null(exclusion_flag)) {
-    if (has_col(exclusion_flag)) {
+    if (exclusion_flag %in% names(data)) {
       ef <- data[[exclusion_flag]]
       ef_ok <- !any(is.na(ef)) && is.numeric(ef) && all(ef == round(ef))
       log_check(
@@ -165,7 +214,7 @@ check_nm_dataset <- function(
   # TIME checks
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("TIME")) {
-    time <- data$TIME
+    time <- get_col("TIME")
     log_check(
       "time_numeric",
       "TIME is numeric",
@@ -183,17 +232,17 @@ check_nm_dataset <- function(
   # ──────────────────────────────────────────────────────────────────────────
   # TIME non-decreasing within ID (except EVID 3, 4)
   # ──────────────────────────────────────────────────────────────────────────
-  if (has_col("TIME") && has_col("ID") && is.numeric(data$TIME)) {
+  if (has_col("TIME") && has_col("ID") && is.numeric(get_col("TIME"))) {
     time_ok <- TRUE
-    for (id in unique(data$ID)) {
-      idx <- data$ID == id
-      sub <- data[idx, ]
-      # exclude reset events (EVID 3, 4) from this check
-      if (has_col("EVID")) {
-        keep <- !(sub$EVID %in% c(3, 4))
-        t <- sub$TIME[keep]
-      } else {
-        t <- sub$TIME
+    id_vec <- get_col("ID")
+    time_vec <- get_col("TIME")
+    evid_vec <- if (has_col("EVID")) get_col("EVID") else NULL
+    for (id in unique(id_vec)) {
+      idx <- id_vec == id
+      t <- time_vec[idx]
+      if (!is.null(evid_vec)) {
+        keep <- !(evid_vec[idx] %in% c(3, 4))
+        t <- t[keep]
       }
       if (length(t) > 1 && any(diff(t) < 0, na.rm = TRUE)) {
         time_ok <- FALSE
@@ -211,7 +260,7 @@ check_nm_dataset <- function(
   # EVID checks
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("EVID")) {
-    evid <- data$EVID
+    evid <- get_col("EVID")
     log_check(
       "evid_values",
       "EVID values are in {0, 1, 2, 3, 4}",
@@ -223,15 +272,15 @@ check_nm_dataset <- function(
   # CMT checks
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("CMT")) {
-    cmt <- data$CMT
+    cmt <- get_col("CMT")
     log_check(
       "cmt_integer",
       "CMT values are integers",
       if (is.numeric(cmt) && all(cmt == round(cmt), na.rm = TRUE)) "PASS" else "FAIL"
     )
     if (has_col("EVID")) {
-      # For non-EVID==3 records, CMT should be positive (allow negative for compartment emptying)
-      non_reset <- data$EVID != 3
+      evid <- get_col("EVID")
+      non_reset <- evid != 3
       cmt_sub <- cmt[non_reset]
       cmt_sub <- cmt_sub[!is.na(cmt_sub)]
       log_check(
@@ -246,14 +295,15 @@ check_nm_dataset <- function(
   # DV checks
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("DV")) {
-    dv <- data$DV
+    dv <- get_col("DV")
     log_check(
       "dv_numeric",
       "DV is numeric",
       if (is.numeric(dv)) "PASS" else "FAIL"
     )
     if (has_col("EVID")) {
-      dose_evids <- data$EVID %in% c(1, 4)
+      evid <- get_col("EVID")
+      dose_evids <- evid %in% c(1, 4)
       dv_at_dose <- dv[dose_evids]
       log_check(
         "dv_missing_dose",
@@ -261,9 +311,9 @@ check_nm_dataset <- function(
         if (all(is.na(dv_at_dose) | dv_at_dose == 0)) "PASS" else "FAIL"
       )
     }
-    # Non-numeric / NA in DV for observation records
     if (has_col("EVID") && is.numeric(dv)) {
-      obs_dv <- dv[data$EVID == 0]
+      evid <- get_col("EVID")
+      obs_dv <- dv[evid == 0]
       log_check(
         "dv_obs_nonmissing",
         "DV is non-missing for observation records (EVID 0)",
@@ -276,34 +326,34 @@ check_nm_dataset <- function(
   # MDV checks
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("MDV")) {
-    mdv <- data$MDV
+    mdv <- get_col("MDV")
     log_check(
       "mdv_binary",
       "MDV is binary (0 or 1)",
       if (all(mdv %in% c(0, 1), na.rm = TRUE)) "PASS" else "FAIL"
     )
-    if (has_col("DV") && is.numeric(data$DV) && has_col("EVID")) {
-      obs <- data$EVID == 0
-      # For observations: MDV should be 1 when DV is NA, 0 when DV is not NA
-      expected_mdv <- ifelse(is.na(data$DV[obs]), 1, 0)
+    if (has_col("DV") && is.numeric(get_col("DV")) && has_col("EVID")) {
+      dv <- get_col("DV")
+      evid <- get_col("EVID")
+      obs <- evid == 0
+      expected_mdv <- ifelse(is.na(dv[obs]), 1, 0)
       log_check(
         "mdv_dv_consistent",
         "MDV is consistent with is.na(DV) for observation records (EVID 0)",
         if (all(mdv[obs] == expected_mdv, na.rm = TRUE)) "PASS" else "FAIL"
       )
-      # For dosing records, MDV should be 1
-      dosing <- data$EVID %in% c(1, 4)
+      dosing <- evid %in% c(1, 4)
       log_check(
         "mdv_dosing",
         "MDV is 1 for dosing records (EVID 1, 4)",
         if (all(mdv[dosing] == 1, na.rm = TRUE)) "PASS" else "FAIL"
       )
     }
-    # Non-missing observations should have MDV = 0
-    if (has_col("DV") && is.numeric(data$DV)) {
-      nonmissing_obs <- !is.na(data$DV) & data$DV != 0
+    if (has_col("DV") && is.numeric(get_col("DV"))) {
+      dv <- get_col("DV")
+      nonmissing_obs <- !is.na(dv) & dv != 0
       if (has_col("EVID")) {
-        nonmissing_obs <- nonmissing_obs & data$EVID == 0
+        nonmissing_obs <- nonmissing_obs & get_col("EVID") == 0
       }
       log_check(
         "mdv_nonmissing_obs",
@@ -317,21 +367,22 @@ check_nm_dataset <- function(
   # AMT checks
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("AMT")) {
-    amt <- data$AMT
+    amt <- get_col("AMT")
     log_check(
       "amt_numeric",
       "AMT is numeric",
       if (is.numeric(amt)) "PASS" else "FAIL"
     )
     if (has_col("EVID") && is.numeric(amt)) {
-      obs_other <- data$EVID %in% c(0, 2)
+      evid <- get_col("EVID")
+      obs_other <- evid %in% c(0, 2)
       amt_obs <- amt[obs_other]
       log_check(
         "amt_zero_obs",
         "AMT is 0 or missing for observation/other-type records (EVID 0, 2)",
         if (all(is.na(amt_obs) | amt_obs == 0)) "PASS" else "FAIL"
       )
-      dose_recs <- data$EVID %in% c(1, 4)
+      dose_recs <- evid %in% c(1, 4)
       amt_dose <- amt[dose_recs]
       log_check(
         "amt_positive_dose",
@@ -339,18 +390,18 @@ check_nm_dataset <- function(
         if (all(amt_dose > 0, na.rm = TRUE)) "PASS" else "FAIL"
       )
     }
-    # AMT > 0 should have EVID = 1
     if (has_col("EVID") && is.numeric(amt)) {
+      evid <- get_col("EVID")
       amt_pos <- !is.na(amt) & amt > 0
       log_check(
         "amt_evid_consistent",
         "Records with AMT > 0 have EVID = 1 (or 4)",
-        if (all(data$EVID[amt_pos] %in% c(1, 4))) "PASS" else "FAIL"
+        if (all(evid[amt_pos] %in% c(1, 4))) "PASS" else "FAIL"
       )
     }
-    # Non-numeric/NA in AMT for dosing records
     if (has_col("EVID")) {
-      dose_recs <- data$EVID %in% c(1, 4)
+      evid <- get_col("EVID")
+      dose_recs <- evid %in% c(1, 4)
       log_check(
         "amt_nonmissing_dose",
         "AMT is non-missing for dosing records (EVID 1, 4)",
@@ -362,13 +413,16 @@ check_nm_dataset <- function(
   # ──────────────────────────────────────────────────────────────────────────
   # DV / MDV / BLQ consistency
   # ──────────────────────────────────────────────────────────────────────────
-  if (has_col("DV") && has_col("MDV") && has_col("EVID") && is.numeric(data$DV)) {
-    obs <- data$EVID == 0
-    dv_leq_zero <- obs & !is.na(data$DV) & data$DV <= 0
+  if (has_col("DV") && has_col("MDV") && has_col("EVID") && is.numeric(get_col("DV"))) {
+    dv <- get_col("DV")
+    mdv <- get_col("MDV")
+    evid <- get_col("EVID")
+    obs <- evid == 0
+    dv_leq_zero <- obs & !is.na(dv) & dv <= 0
     log_check(
       "dv_leq_zero_mdv",
       "DV <= 0 observations have MDV = 1 (or BLQ flag)",
-      if (sum(dv_leq_zero) == 0 || all(data$MDV[dv_leq_zero] == 1)) "PASS" else "FAIL"
+      if (sum(dv_leq_zero) == 0 || all(mdv[dv_leq_zero] == 1)) "PASS" else "FAIL"
     )
   }
 
@@ -376,17 +430,17 @@ check_nm_dataset <- function(
   # RATE checks
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("RATE")) {
-    rate <- data$RATE
+    rate <- get_col("RATE")
     log_check(
       "rate_numeric",
       "RATE is numeric",
       if (is.numeric(rate)) "PASS" else "FAIL"
     )
     if (is.numeric(rate) && has_col("EVID")) {
-      dose_recs <- data$EVID %in% c(1, 4)
+      evid <- get_col("EVID")
+      dose_recs <- evid %in% c(1, 4)
       rate_dose <- rate[dose_recs]
       rate_dose <- rate_dose[!is.na(rate_dose)]
-      # RATE for dosing events: -2, -1, 0, or positive
       log_check(
         "rate_dose_values",
         "RATE for dosing records is -2, -1, 0, or positive",
@@ -401,14 +455,15 @@ check_nm_dataset <- function(
   # SS checks
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("SS")) {
-    ss <- data$SS
+    ss <- get_col("SS")
     log_check(
       "ss_numeric",
       "SS is numeric",
       if (is.numeric(ss)) "PASS" else "FAIL"
     )
     if (is.numeric(ss) && has_col("EVID")) {
-      dose_recs <- data$EVID %in% c(1, 4)
+      evid <- get_col("EVID")
+      dose_recs <- evid %in% c(1, 4)
       ss_dose <- ss[dose_recs]
       ss_dose <- ss_dose[!is.na(ss_dose)]
       log_check(
@@ -425,19 +480,19 @@ check_nm_dataset <- function(
   # ADDL / II checks
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("ADDL") || has_col("II")) {
-    # ADDL and II must both be present
     log_check(
       "addl_ii_paired",
       "ADDL and II are both present (required together)",
       if (has_col("ADDL") && has_col("II")) "PASS" else "FAIL"
     )
     if (has_col("ADDL")) {
-      addl <- data$ADDL
+      addl <- get_col("ADDL")
       log_check(
         "addl_nonneg_int",
         "ADDL is a non-negative integer for dosing records",
         if (is.numeric(addl) && has_col("EVID")) {
-          dose_recs <- data$EVID %in% c(1, 4)
+          evid <- get_col("EVID")
+          dose_recs <- evid %in% c(1, 4)
           addl_d <- addl[dose_recs]
           addl_d <- addl_d[!is.na(addl_d)]
           all(addl_d >= 0) && all(addl_d == round(addl_d))
@@ -447,12 +502,13 @@ check_nm_dataset <- function(
       )
     }
     if (has_col("II")) {
-      ii <- data$II
+      ii <- get_col("II")
       log_check(
         "ii_nonneg_int",
         "II is a non-negative integer for dosing records",
         if (is.numeric(ii) && has_col("EVID")) {
-          dose_recs <- data$EVID %in% c(1, 4)
+          evid <- get_col("EVID")
+          dose_recs <- evid %in% c(1, 4)
           ii_d <- ii[dose_recs]
           ii_d <- ii_d[!is.na(ii_d)]
           all(ii_d >= 0) && all(ii_d == round(ii_d))
@@ -469,20 +525,25 @@ check_nm_dataset <- function(
   # Overlapping ADDL-expanded doses
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("ADDL") && has_col("II") && has_col("EVID") && has_col("ID") &&
-      has_col("TIME") && is.numeric(data$ADDL) && is.numeric(data$II)) {
+      has_col("TIME") && is.numeric(get_col("ADDL")) && is.numeric(get_col("II"))) {
     overlap_found <- FALSE
-    for (id in unique(data$ID)) {
-      sub <- data[data$ID == id, ]
-      dose_idx <- which(sub$EVID %in% c(1, 4))
+    id_vec <- get_col("ID")
+    time_vec <- get_col("TIME")
+    evid_vec <- get_col("EVID")
+    addl_vec <- get_col("ADDL")
+    ii_vec <- get_col("II")
+    for (id in unique(id_vec)) {
+      idx <- which(id_vec == id)
+      dose_idx <- idx[evid_vec[idx] %in% c(1, 4)]
       if (length(dose_idx) < 2) next
       for (i in seq_len(length(dose_idx) - 1)) {
-        row_i <- dose_idx[i]
-        row_next <- dose_idx[i + 1]
-        addl_i <- sub$ADDL[row_i]
-        ii_i <- sub$II[row_i]
+        ri <- dose_idx[i]
+        rn <- dose_idx[i + 1]
+        addl_i <- addl_vec[ri]
+        ii_i <- ii_vec[ri]
         if (!is.na(addl_i) && !is.na(ii_i) && addl_i > 0 && ii_i > 0) {
-          last_expanded <- sub$TIME[row_i] + addl_i * ii_i
-          if (last_expanded >= sub$TIME[row_next]) {
+          last_expanded <- time_vec[ri] + addl_i * ii_i
+          if (last_expanded >= time_vec[rn]) {
             overlap_found <- TRUE
             break
           }
@@ -501,7 +562,7 @@ check_nm_dataset <- function(
   # ID checks
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("ID")) {
-    ids <- as.character(data$ID)
+    ids <- as.character(get_col("ID"))
     has_leading_zeros <- any(grepl("^0\\d+", ids))
     log_check(
       "id_leading_zeros",
@@ -519,7 +580,9 @@ check_nm_dataset <- function(
   # ──────────────────────────────────────────────────────────────────────────
   # Unique records (ID, TIME, CMT, EVID)
   # ──────────────────────────────────────────────────────────────────────────
-  dup_cols <- intersect(c("ID", "TIME", "CMT", "EVID"), names(data))
+  dup_nm_keys <- c("ID", "TIME", "CMT", "EVID")
+  dup_actual <- vapply(dup_nm_keys, col_for, character(1))
+  dup_cols <- dup_actual[dup_actual %in% names(data)]
   if (length(dup_cols) >= 2) {
     dup_check <- duplicated(data[, dup_cols, drop = FALSE])
     log_check(
@@ -533,10 +596,12 @@ check_nm_dataset <- function(
   # Dataset ordering (ID, TIME)
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("ID") && has_col("TIME")) {
-    sorted <- data[order(data$ID, data$TIME), ]
+    id_vec <- get_col("ID")
+    time_vec <- get_col("TIME")
+    ord <- order(id_vec, time_vec)
     is_sorted <- identical(
-      paste(data$ID, data$TIME),
-      paste(sorted$ID, sorted$TIME)
+      paste(id_vec, time_vec),
+      paste(id_vec[ord], time_vec[ord])
     )
     log_check(
       "data_ordered",
@@ -572,12 +637,20 @@ check_nm_dataset <- function(
   # ──────────────────────────────────────────────────────────────────────────
   # Missing covariate values
   # ──────────────────────────────────────────────────────────────────────────
-  # Covariates are columns that are not standard NONMEM columns
+  # Covariates are columns that are not standard NONMEM columns (mapped or not)
   nm_standard <- c(
     "ID", "TIME", "DV", "MDV", "EVID", "AMT", "RATE", "SS",
     "II", "ADDL", "CMT", "GROUP", "BLQ", "LLOQ", "TAD"
   )
-  cov_cols <- setdiff(names(data), c(nm_standard, if (!is.null(exclusion_flag)) exclusion_flag))
+  # Include both the standard names and the dictionary-mapped actual names
+  all_standard <- unique(c(
+    nm_standard,
+    vapply(intersect(nm_keys, nm_standard), col_for, character(1))
+  ))
+  cov_cols <- setdiff(
+    names(data),
+    c(all_standard, if (!is.null(exclusion_flag)) exclusion_flag)
+  )
   if (length(cov_cols) > 0) {
     has_missing_cov <- FALSE
     for (col in cov_cols) {
@@ -597,12 +670,13 @@ check_nm_dataset <- function(
   # ──────────────────────────────────────────────────────────────────────────
   # RATE column consistency with AMT
   # ──────────────────────────────────────────────────────────────────────────
-  if (has_col("RATE") && has_col("AMT") && is.numeric(data$RATE) && is.numeric(data$AMT)) {
+  if (has_col("RATE") && has_col("AMT") &&
+      is.numeric(get_col("RATE")) && is.numeric(get_col("AMT"))) {
     if (has_col("EVID")) {
-      dose_recs <- data$EVID %in% c(1, 4)
-      rate_dose <- data$RATE[dose_recs]
-      amt_dose <- data$AMT[dose_recs]
-      # If RATE is a real rate (> 0 and not -1/-2), AMT handling differs
+      evid <- get_col("EVID")
+      dose_recs <- evid %in% c(1, 4)
+      rate_dose <- get_col("RATE")[dose_recs]
+      amt_dose <- get_col("AMT")[dose_recs]
       real_rate <- !is.na(rate_dose) & !is.na(amt_dose) & rate_dose > 0
       log_check(
         "rate_amt_consistency",

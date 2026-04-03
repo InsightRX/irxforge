@@ -6,6 +6,7 @@
 \usage{
 check_nm_dataset(
   data,
+  dictionary = NULL,
   exclusion_flag = NULL,
   max_digits = 10,
   max_id_digits = 5,
@@ -15,6 +16,14 @@ check_nm_dataset(
 }
 \arguments{
 \item{data}{a data.frame (or tibble) containing the NONMEM dataset to check.}
+
+\item{dictionary}{an optional named list that maps standard NONMEM column
+names to the actual column names in \code{data}. For example,
+\code{list(ID = "NMID", TIME = "TAD")} means the column called \code{"NMID"} in
+\code{data} plays the role of \code{ID}, and \code{"TAD"} plays the role of \code{TIME}.
+Any standard name not listed in the dictionary is assumed to match the
+column name in \code{data} as-is. Supported keys: \code{ID}, \code{TIME}, \code{DV}, \code{MDV},
+\code{EVID}, \code{AMT}, \code{CMT}, \code{RATE}, \code{SS}, \code{ADDL}, \code{II}.}
 
 \item{exclusion_flag}{character name of the column used as an exclusion flag
 (for \verb{$DATA ACCEPT} / \code{IGNORE} in NONMEM). If \code{NULL} (default), the
