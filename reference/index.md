@@ -4,6 +4,8 @@
 
 - [`add_nominal_timepoints()`](https://insightrx.github.io/irxforge/reference/add_nominal_timepoints.md)
   : Add nominal timepoints to a dataset
+- [`check_nm_dataset()`](https://insightrx.github.io/irxforge/reference/check_nm_dataset.md)
+  : Run automated quality checks on a NONMEM dataset
 - [`create_demographics_table()`](https://insightrx.github.io/irxforge/reference/create_demographics_table.md)
   : Create a standardized table for demographics information
 - [`detect_dataset_type()`](https://insightrx.github.io/irxforge/reference/detect_dataset_type.md)
