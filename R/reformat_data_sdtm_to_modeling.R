@@ -502,7 +502,7 @@ reformat_data_sdtm_to_modeling <- function(
       "ETHNIC",
       "COUNTRY"
     ) %>%
-    dplyr::filter(!(is.na(.data$DV) & .data$EVID == 0)) # filter out DV=0 at time==0
+    dplyr::filter(!(is.na(.data$DV) & .data$EVID == 0)) # filter out observation rows with missing DV
   
   ## Convert NA's to dots (or something else)
   if(!is.null(na)) {
