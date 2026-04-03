@@ -121,8 +121,8 @@ test_that("dose records have EVID=1 and observations have EVID=0", {
   # Dose records have AMT set
   expect_true(all(!is.na(dose_rows$AMT)))
   expect_true(all(dose_rows$AMT > 0))
-  # Observation records have AMT = NA
-  expect_true(all(is.na(obs_rows$AMT)))
+  # Observation records have AMT = "." (default NA replacement)
+  expect_true(all(obs_rows$AMT == "."))
 })
 
 test_that("MDV is 1 for dose records and 0 for observations with non-missing DV", {
@@ -197,11 +197,11 @@ test_that("ROUTE and FORM are lowercase", {
   expect_true(all(dose_rows$FORM == "tablet"))
 })
 
-test_that("WT is NA when VS domain is not provided", {
+test_that("WT is '.' when VS domain is not provided (default na replacement)", {
   data <- create_sdtm_test_data()
   result <- suppressWarnings(reformat_data_sdtm_to_modeling(data))
 
-  expect_true(all(is.na(result$WT)))
+  expect_true(all(result$WT == "."))
 })
 
 test_that("param_lookup is built dynamically from PC data", {
@@ -262,4 +262,47 @@ test_that("TIME is 0 for dose records", {
 
   doses <- result[result$EVID == 1, ]
   expect_true(all(doses$TIME == 0))
+})
+
+test_that("NA values are converted to '.' by default", {
+  data <- create_sdtm_test_data()
+  result <- suppressWarnings(reformat_data_sdtm_to_modeling(data))
+
+  # WT is NA when VS is not provided, so it should become "."
+  expect_true(all(result$WT == "."))
+  # AMT is NA for observations, should become "."
+  obs <- result[result$EVID == 0, ]
+  expect_true(all(obs$AMT == "."))
+  # No actual NA values should remain anywhere
+  expect_false(any(is.na(result)))
+})
+
+test_that("na = NA keeps NA values as-is", {
+  data <- create_sdtm_test_data()
+  result <- suppressWarnings(reformat_data_sdtm_to_modeling(data, na = NA))
+
+  # WT should still be NA
+  expect_true(all(is.na(result$WT)))
+  # AMT should be NA for observations
+  obs <- result[result$EVID == 0, ]
+  expect_true(all(is.na(obs$AMT)))
+})
+
+test_that("na = NULL keeps NA values as-is", {
+  data <- create_sdtm_test_data()
+  result <- suppressWarnings(reformat_data_sdtm_to_modeling(data, na = NULL))
+
+  # WT should still be NA
+  expect_true(all(is.na(result$WT)))
+})
+
+test_that("na = custom value replaces NAs with that value", {
+  data <- create_sdtm_test_data()
+  result <- suppressWarnings(reformat_data_sdtm_to_modeling(data, na = -99))
+
+  # WT should be -99
+  expect_true(all(result$WT == -99))
+  # AMT for observations should be -99
+  obs <- result[result$EVID == 0, ]
+  expect_true(all(obs$AMT == -99))
 })

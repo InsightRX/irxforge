@@ -3,6 +3,8 @@
 #' @param data list containing data.frames with SDTM domains
 #' @param dictionary a data dictionary that maps expected variable names to 
 #' variables in the data.
+#' @param na what to set NA values to. E.g. ".", (default) or NA (keep NA),
+#' or NULL (do nothing).
 #'
 #' @returns data.frame with population PK input data in NONMEM-style
 #' format. It will also add the non-standard columns ROUTE ("oral", "iv") and 
@@ -12,7 +14,8 @@
 #' @export
 reformat_data_sdtm_to_modeling <- function(
   data, 
-  dictionary
+  dictionary,
+  na = "."
 ) {
   
   ## Parse into modeling dataset (NONMEM-style format)
@@ -500,6 +503,12 @@ reformat_data_sdtm_to_modeling <- function(
       "COUNTRY"
     ) %>%
     dplyr::filter(!(is.na(.data$DV) & .data$EVID == 0)) # filter out DV=0 at time==0
+  
+  ## Convert NA's to dots (or something else)
+  if(!is.null(na)) {
+    poppk_data <- poppk_data |>
+      dplyr::mutate(dplyr::across(dplyr::everything(), ~ifelse(is.na(.) | . == "NA", na, .)))
+  }
   
   poppk_data
 }
