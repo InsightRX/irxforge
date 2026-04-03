@@ -213,6 +213,34 @@ test_that("ADDL overlap is detected", {
   expect_equal(res$result[res$check == "addl_overlap"], "FAIL")
 })
 
+test_that("ADDL overlap detection works on unsorted datasets", {
+  # Build an overlapping dataset but shuffle the rows so it's not sorted
+  d <- data.frame(
+    ID   = c(1, 1, 1, 1),
+    TIME = c(0, 24, 24, 48),
+    DV   = c(NA, NA, 5, 3),
+    MDV  = c(1, 1, 0, 0),
+    EVID = c(1, 1, 0, 0),
+    AMT  = c(100, 100, 0, 0),
+    CMT  = c(1, 1, 1, 1),
+    ADDL = c(5, 0, 0, 0),
+    II   = c(12, 0, 0, 0),
+    stringsAsFactors = FALSE
+  )
+  # TIME=0, ADDL=5, II=12 => last expanded at 60 >= next dose at 24
+  # Shuffle rows so dose at TIME=24 comes before dose at TIME=0
+  d_shuffled <- d[c(3, 2, 4, 1), ]
+  res <- check_nm_dataset(d_shuffled, verbose = FALSE)
+  expect_equal(res$result[res$check == "addl_overlap"], "FAIL")
+
+  # Non-overlapping case: reduce ADDL so expansion ends before next dose
+  d2 <- d
+  d2$ADDL[1] <- 1  # last expanded at TIME = 12, next dose at 24 → OK
+  d2_shuffled <- d2[c(3, 2, 4, 1), ]
+  res2 <- check_nm_dataset(d2_shuffled, verbose = FALSE)
+  expect_equal(res2$result[res2$check == "addl_overlap"], "PASS")
+})
+
 test_that("covariate missing values are detected", {
   d <- make_nm()
   d$WT <- c(70, 80, NA, 75, 65, 90, 85, 70)

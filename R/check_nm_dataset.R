@@ -520,8 +520,11 @@ check_nm_dataset <- function(
     ii_vec <- get_col("II")
     for (id in unique(id_vec)) {
       idx <- which(id_vec == id)
+      # Sort dose records by TIME to avoid false positives/negatives
+      # when the dataset is not ordered
       dose_idx <- idx[evid_vec[idx] %in% c(1, 4)]
       if (length(dose_idx) < 2) next
+      dose_idx <- dose_idx[order(time_vec[dose_idx])]
       for (i in seq_len(length(dose_idx) - 1)) {
         ri <- dose_idx[i]
         rn <- dose_idx[i + 1]
