@@ -655,14 +655,22 @@ check_nm_dataset <- function(
     has_missing_cov <- FALSE
     for (col in cov_cols) {
       vals <- data[[col]]
-      if (any(is.na(vals)) || any(vals %in% c(-999, -99, "."), na.rm = TRUE)) {
+      has_sentinel <- FALSE
+
+      if (is.numeric(vals)) {
+        has_sentinel <- any(vals %in% c(-999, -99), na.rm = TRUE)
+      } else if (is.character(vals) || is.factor(vals)) {
+        has_sentinel <- any(as.character(vals) %in% c(".", "NA"), na.rm = TRUE)
+      }
+
+      if (any(is.na(vals)) || has_sentinel) {
         has_missing_cov <- TRUE
         break
       }
     }
     log_check(
       "covariate_missing",
-      "No missing or sentinel values (-999, '.') in covariate columns",
+      "No missing or sentinel values (-999, -99, '.', 'NA') in covariate columns",
       if (!has_missing_cov) "PASS" else "FAIL"
     )
   }
