@@ -6,7 +6,7 @@ modeling dataset
 ## Usage
 
 ``` r
-reformat_data_modeling_to_nca(data, dictionary = NULL)
+reformat_data_modeling_to_nca(data, dictionary = NULL, na = NA)
 ```
 
 ## Arguments
@@ -19,6 +19,11 @@ reformat_data_modeling_to_nca(data, dictionary = NULL)
 
   a data dictionary that maps expected variable names to variables in
   the data.
+
+- na:
+
+  what to set NA values to. E.g. ".", or NA (keep NA, default), or NULL
+  (do nothing).
 
 ## Value
 

@@ -12,7 +12,9 @@ reformat_data_nca_to_modeling(
     = "DV"),
   dose_compartment = 1,
   obs_compartment = 1,
-  covariates = NULL
+  covariates = NULL,
+  repeat_doses = NULL,
+  na = "."
 )
 ```
 
@@ -39,6 +41,21 @@ reformat_data_nca_to_modeling(
 
   a vector of covariate names that are to be extracted and added to the
   modeling dataset.
+
+- repeat_doses:
+
+  Optional list for repeated dosing (MAD studies). Must contain
+  `interval` (dosing interval in TIME units). Optionally contains `n`
+  (total number of doses). If `n` is omitted, it is inferred per
+  subject/group as `ceiling(max(observation_time) / interval)`. Only
+  applies to column-wise dose data. Default `NULL` preserves existing
+  behavior (no ADDL/II columns). Examples: `list(interval = 12)` or
+  `list(n = 5, interval = 12)`.
+
+- na:
+
+  what to set NA values to. E.g. ".", (default) or NA (keep NA), or NULL
+  (do nothing).
 
 ## Value
 

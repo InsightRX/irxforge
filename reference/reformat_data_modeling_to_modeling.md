@@ -6,7 +6,7 @@ dataset.
 ## Usage
 
 ``` r
-reformat_data_modeling_to_modeling(data, dictionary = NULL)
+reformat_data_modeling_to_modeling(data, dictionary = NULL, na = ".")
 ```
 
 ## Arguments
@@ -19,6 +19,11 @@ reformat_data_modeling_to_modeling(data, dictionary = NULL)
 
   a data dictionary that maps expected variable names to variables in
   the data.
+
+- na:
+
+  what to set NA values to. E.g. ".", (default) or NA (keep NA), or NULL
+  (do nothing).
 
 ## Value
 
