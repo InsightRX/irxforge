@@ -75,6 +75,66 @@ test_that("dose records are reduced to one per subject when dose is column-wise"
   expect_equal(out$TIME[out$EVID == 1], 0)
 })
 
+test_that("repeat_doses = NULL produces no ADDL/II columns", {
+  dat <- data.frame(
+    ID = c(1, 1, 1),
+    TIME = c(0, 12, 24),
+    AMT = c(100, 100, 100),
+    DV = c(NA, 5, 3)
+  )
+  out <- reformat_data_nca_to_modeling(data = dat)
+  expect_false("ADDL" %in% names(out))
+  expect_false("II" %in% names(out))
+})
+
+test_that("repeat_doses with explicit n adds correct ADDL/II", {
+  dat <- data.frame(
+    ID = c(1, 1, 1),
+    TIME = c(0, 12, 24),
+    AMT = c(100, 100, 100),
+    DV = c(NA, 5, 3)
+  )
+  out <- reformat_data_nca_to_modeling(data = dat, repeat_doses = list(n = 5, interval = 12))
+  dose_rows <- out[out$EVID == 1, ]
+  obs_rows  <- out[out$EVID == 0, ]
+  expect_equal(dose_rows$ADDL, 4)
+  expect_equal(dose_rows$II,   12)
+  expect_true(all(obs_rows$ADDL == 0))
+  expect_true(all(obs_rows$II   == 0))
+})
+
+test_that("repeat_doses without n infers ADDL per subject from max obs time", {
+  dat <- data.frame(
+    ID   = c(1, 1, 1,  2, 2, 2),
+    TIME = c(0, 12, 24, 0, 6, 12),
+    AMT  = c(100, 100, 100, 200, 200, 200),
+    DV   = c(NA, 5, 3, NA, 8, 6)
+  )
+  out <- reformat_data_nca_to_modeling(data = dat, repeat_doses = list(interval = 12))
+  dose_rows <- out[out$EVID == 1, ]
+  # Subject 1: max obs time = 24, ceiling(24/12) - 1 = 1
+  expect_equal(dose_rows$ADDL[dose_rows$ID == 1], 1)
+  # Subject 2: max obs time = 12, ceiling(12/12) - 1 = 0 (pmax guard)
+  expect_equal(dose_rows$ADDL[dose_rows$ID == 2], 0)
+  expect_true(all(dose_rows$II == 12))
+  obs_rows <- out[out$EVID == 0, ]
+  expect_true(all(obs_rows$ADDL == 0))
+  expect_true(all(obs_rows$II   == 0))
+})
+
+test_that("repeat_doses without interval raises an error", {
+  dat <- data.frame(
+    ID = c(1, 1),
+    TIME = c(0, 12),
+    AMT = c(100, 100),
+    DV = c(NA, 5)
+  )
+  expect_error(
+    reformat_data_nca_to_modeling(data = dat, repeat_doses = list(n = 3)),
+    "interval"
+  )
+})
+
 test_that("reformat_data_nca_to_modeling handles multiple doses per subject", {
   # Create data with multiple dose events per subject (row-wise dosing)
   dat <- data.frame(

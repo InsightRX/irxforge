@@ -11,7 +11,9 @@ reformat_data_nca_to_modeling(
     = "DV"),
   dose_compartment = 1,
   obs_compartment = 1,
-  covariates = NULL
+  covariates = NULL,
+  repeat_doses = NULL,
+  na = "."
 )
 }
 \arguments{
@@ -26,6 +28,16 @@ variables in the data.}
 
 \item{covariates}{a vector of covariate names that are to be extracted
 and added to the modeling dataset.}
+
+\item{repeat_doses}{Optional list for repeated dosing (MAD studies). Must
+contain \code{interval} (dosing interval in TIME units). Optionally contains \code{n}
+(total number of doses). If \code{n} is omitted, it is inferred per subject/group
+as \code{ceiling(max(observation_time) / interval)}. Only applies to column-wise
+dose data. Default \code{NULL} preserves existing behavior (no ADDL/II columns).
+Examples: \code{list(interval = 12)} or \code{list(n = 5, interval = 12)}.}
+
+\item{na}{what to set NA values to. E.g. ".", (default) or NA (keep NA),
+or NULL (do nothing).}
 }
 \value{
 data.frame with population PK input data in NONMEM-style

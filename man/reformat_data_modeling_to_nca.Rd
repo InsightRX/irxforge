@@ -5,13 +5,16 @@
 \title{Reformat NCA-type analysis-ready dataset (ARD) into NONMEM-style modeling
 dataset}
 \usage{
-reformat_data_modeling_to_nca(data, dictionary = NULL)
+reformat_data_modeling_to_nca(data, dictionary = NULL, na = NA)
 }
 \arguments{
 \item{data}{dataset formatted as modeling-ready dataset}
 
 \item{dictionary}{a data dictionary that maps expected variable names to
 variables in the data.}
+
+\item{na}{what to set NA values to. E.g. ".", or NA (keep NA, default),
+or NULL (do nothing).}
 }
 \value{
 data.frame with population PK input data in NONMEM-style

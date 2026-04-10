@@ -5,13 +5,16 @@
 \title{Reformat modeling dataset into a properly checked and validated modeling
 dataset.}
 \usage{
-reformat_data_modeling_to_modeling(data, dictionary = NULL)
+reformat_data_modeling_to_modeling(data, dictionary = NULL, na = ".")
 }
 \arguments{
 \item{data}{dataset formatted as modeling-ready dataset}
 
 \item{dictionary}{a data dictionary that maps expected variable names to
 variables in the data.}
+
+\item{na}{what to set NA values to. E.g. ".", (default) or NA (keep NA),
+or NULL (do nothing).}
 }
 \value{
 data.frame with population PK input data in NONMEM-style

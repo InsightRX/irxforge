@@ -4,13 +4,16 @@
 \alias{reformat_data_sdtm_to_modeling}
 \title{Reformat SDTM datasets into NONMEM-style modeling dataset}
 \usage{
-reformat_data_sdtm_to_modeling(data, dictionary)
+reformat_data_sdtm_to_modeling(data, dictionary, na = ".")
 }
 \arguments{
 \item{data}{list containing data.frames with SDTM domains}
 
 \item{dictionary}{a data dictionary that maps expected variable names to
 variables in the data.}
+
+\item{na}{what to set NA values to. E.g. ".", (default) or NA (keep NA),
+or NULL (do nothing).}
 }
 \value{
 data.frame with population PK input data in NONMEM-style
