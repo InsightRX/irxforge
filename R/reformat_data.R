@@ -17,7 +17,10 @@
 #'   `DS`,  following the SDTM structure and nomenclature.
 #' @param output_type type of output dataset. Can be either `"nca"` or
 #'   `"modeling"`.
-#' @param ... passed onto specific reformatting functions:
+#' @param ... passed onto specific reformatting functions. All child functions
+#' accept `categorical_mapping` (character vector or data.frame) for converting
+#' categorical columns to numeric. See individual function docs for details.
+#' Additional arguments passed to specific reformatting functions:
 #' - `input_type = "nca"` and `output_type = "modeling"`:
 #'   [reformat_data_nca_to_modeling()]
 #' - `input_type = "sdtm"` and `output_type = "modeling"`:

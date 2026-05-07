@@ -1,20 +1,27 @@
 #' Reformat SDTM datasets into NONMEM-style modeling dataset
 #' 
 #' @param data list containing data.frames with SDTM domains
-#' @param dictionary a data dictionary that maps expected variable names to 
+#' @param dictionary a data dictionary that maps expected variable names to
 #' variables in the data.
+#' @param categorical_mapping Either a character vector of column names to
+#' auto-encode (most common value gets 0, next gets 1, etc.), or a data.frame
+#' with columns `column`, `original_value`, `encoded_value` for explicit
+#' mappings. NA values are encoded as -99. The final mapping is attached as a
+#' `"categorical_mapping"` attribute on the returned data.frame. Default `NULL`
+#' skips encoding.
 #' @param na what to set NA values to. E.g. ".", (default) or NA (keep NA),
 #' or NULL (do nothing).
 #'
 #' @returns data.frame with population PK input data in NONMEM-style
-#' format. It will also add the non-standard columns ROUTE ("oral", "iv") and 
-#' FORM (formulation: "tablet", "suspension", "patch", "infusion", etc.) with 
+#' format. It will also add the non-standard columns ROUTE ("oral", "iv") and
+#' FORM (formulation: "tablet", "suspension", "patch", "infusion", etc.) with
 #' values for each dose and NA for observations.
-#' 
+#'
 #' @export
 reformat_data_sdtm_to_modeling <- function(
-  data, 
+  data,
   dictionary,
+  categorical_mapping = NULL,
   na = "."
 ) {
   
@@ -504,12 +511,19 @@ reformat_data_sdtm_to_modeling <- function(
     ) %>%
     dplyr::filter(!(is.na(.data$DV) & .data$EVID == 0)) # filter out observation rows with missing DV
   
+  ## Apply categorical encoding
+  poppk_data <- apply_categorical_mapping(poppk_data, categorical_mapping)
+  cat_map <- attr(poppk_data, "categorical_mapping")
+
   ## Convert NA's to dots (or something else)
   if(!is.null(na)) {
     poppk_data <- poppk_data |>
       dplyr::mutate(dplyr::across(dplyr::everything(), ~ifelse(is.na(.) | . == "NA", na, .)))
   }
-  
+
+  ## Preserve categorical mapping attribute (dplyr may strip it)
+  if (!is.null(cat_map)) attr(poppk_data, "categorical_mapping") <- cat_map
+
   poppk_data
 }
 

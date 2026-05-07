@@ -16,6 +16,12 @@
 #' as `ceiling(max(observation_time) / interval)`. Only applies to column-wise
 #' dose data. Default `NULL` preserves existing behavior (no ADDL/II columns).
 #' Examples: `list(interval = 12)` or `list(n = 5, interval = 12)`.
+#' @param categorical_mapping Either a character vector of column names to
+#' auto-encode (most common value gets 0, next gets 1, etc.), or a data.frame
+#' with columns `column`, `original_value`, `encoded_value` for explicit
+#' mappings. NA values are encoded as -99. The final mapping is attached as a
+#' `"categorical_mapping"` attribute on the returned data.frame. Default `NULL`
+#' skips explicit encoding (existing blanket conversion still applies).
 #'
 #' @returns data.frame with population PK input data in NONMEM-style
 #' format.
@@ -34,6 +40,7 @@ reformat_data_nca_to_modeling <- function(
   obs_compartment = 1,
   covariates = NULL,
   repeat_doses = NULL,
+  categorical_mapping = NULL,
   na = "."
 ) {
   
@@ -131,25 +138,34 @@ reformat_data_nca_to_modeling <- function(
     dplyr::select("ID", "TIME", "CMT", "EVID", "MDV", "DV", "AMT", dplyr::any_of(c("ADDL", "II")), "GROUP", "ORIGID", !!covariates) |>
     dplyr::arrange(.data$GROUP, .data$ID, .data$TIME, -.data$EVID)
   
-  ## Convert all character columns to categorical (but numeric)
+  ## Apply user-specified categorical encoding
+  comb <- apply_categorical_mapping(comb, categorical_mapping)
+  cat_map <- attr(comb, "categorical_mapping")
+  already_encoded <- if (!is.null(cat_map)) unique(cat_map$column) else character(0)
+
+  ## Convert remaining character columns to categorical (but numeric)
   for(key in names(comb)) {
+    if (key %in% already_encoded) next
     if(! inherits(comb[[key]], "numeric")) {
       suppressWarnings(
         comb[[key]] <- match(comb[[key]], unique(comb[[key]]))
       )
     }
   }
-  
+
   ## Remove any observations with DV = -99
   comb <- comb |>
     dplyr::filter(.data$DV != -99)
-  
+
   ## Convert NA's to dots or something else
   if(!is.null(na)) {
     comb <- comb |>
       dplyr::mutate(dplyr::across(dplyr::everything(), ~ifelse(is.na(.) | . == "NA", na, .)))
   }
-  
+
+  ## Preserve categorical mapping attribute (dplyr may strip it)
+  if (!is.null(cat_map)) attr(comb, "categorical_mapping") <- cat_map
+
   ## Return
   comb
   
