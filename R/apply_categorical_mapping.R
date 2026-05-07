@@ -115,8 +115,6 @@ apply_categorical_mapping_manual <- function(data, mapping_df) {
   for (col in unique(mapping_df$column)) {
     if (!col %in% names(data)) {
       warning("Column '", col, "' not found in data, skipping.")
-      # Still keep the user-supplied mapping rows
-      mappings[[length(mappings) + 1]] <- mapping_df[mapping_df$column == col, required_cols, drop = FALSE]
       next
     }
 
