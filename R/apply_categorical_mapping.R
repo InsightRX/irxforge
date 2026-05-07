@@ -179,10 +179,9 @@ apply_mapping_to_data <- function(data, mapping) {
     col_map <- mapping[mapping$column == col, ]
     lookup <- stats::setNames(col_map$encoded_value, col_map$original_value)
 
-    vals <- data[[col]]
-    if (is.factor(vals)) vals <- as.character(vals)
+    vals <- as.character(data[[col]])
 
-    # Map values: use lookup for known values, -99 for NA
+    # Map values: use lookup for known values, -99 for NA or unmapped
     new_vals <- numeric(length(vals))
     for (i in seq_along(vals)) {
       if (is.na(vals[i])) {

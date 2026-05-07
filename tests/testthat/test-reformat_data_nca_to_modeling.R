@@ -150,7 +150,9 @@ test_that("categorical_mapping as character vector encodes specified columns wit
     categorical_mapping = c("SEX", "RACE")
   )
   # SEX: M is most common (4 rows) -> 0, F -> 1
-  expect_true(all(out$SEX[out$ORIGID == 1] == 0 | out$SEX[out$ORIGID == 3] == 0))
+  expect_true(all(out$SEX[out$ORIGID == 1] == "0"))
+  expect_true(all(out$SEX[out$ORIGID == 2] == "1"))
+  expect_true(all(out$SEX[out$ORIGID == 3] == "0"))
   # Mapping attribute attached
   mapping <- attr(out, "categorical_mapping")
   expect_true(is.data.frame(mapping))
