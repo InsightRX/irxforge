@@ -9,7 +9,7 @@ dataset"></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9006</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9009</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,6 +49,7 @@ dataset</p>
 <span>  obs_compartment <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  covariates <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  repeat_doses <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  categorical_mapping <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  na <span class="op">=</span> <span class="st">"."</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -86,6 +87,15 @@ contain <code>interval</code> (dosing interval in TIME units). Optionally contai
 as <code>ceiling(max(observation_time) / interval)</code>. Only applies to column-wise
 dose data. Default <code>NULL</code> preserves existing behavior (no ADDL/II columns).
 Examples: <code>list(interval = 12)</code> or <code>list(n = 5, interval = 12)</code>.</p></dd>
+
+
+<dt id="arg-categorical-mapping">categorical_mapping<a class="anchor" aria-label="anchor" href="#arg-categorical-mapping"></a></dt>
+<dd><p>Either a character vector of column names to
+auto-encode (most common value gets 0, next gets 1, etc.), or a data.frame
+with columns <code>column</code>, <code>original_value</code>, <code>encoded_value</code> for explicit
+mappings. NA values are encoded as -99. The final mapping is attached as a
+<code>"categorical_mapping"</code> attribute on the returned data.frame. Default <code>NULL</code>
+skips explicit encoding (existing blanket conversion still applies).</p></dd>
 
 
 <dt id="arg-na">na<a class="anchor" aria-label="anchor" href="#arg-na"></a></dt>

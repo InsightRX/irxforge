@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9006</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9009</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -81,7 +81,10 @@ columns.</p></li>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
-<dd><p>passed onto specific reformatting functions:</p><ul><li><p><code>input_type = "nca"</code> and <code>output_type = "modeling"</code>:
+<dd><p>passed onto specific reformatting functions. All child functions
+accept <code>categorical_mapping</code> (character vector or data.frame) for converting
+categorical columns to numeric. See individual function docs for details.
+Additional arguments passed to specific reformatting functions:</p><ul><li><p><code>input_type = "nca"</code> and <code>output_type = "modeling"</code>:
 <code><a href="reformat_data_nca_to_modeling.html">reformat_data_nca_to_modeling()</a></code></p></li>
 <li><p><code>input_type = "sdtm"</code> and <code>output_type = "modeling"</code>:
 <code><a href="reformat_data_sdtm_to_modeling.html">reformat_data_sdtm_to_modeling()</a></code></p></li>

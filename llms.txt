@@ -9,6 +9,7 @@ Install the development version from
 [GitHub](https://github.com/InsightRX/irxforge) with:
 
 ``` r
+
 # install.packages("pak")
 pak::pak("InsightRX/irxforge")
 ```

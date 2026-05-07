@@ -49,7 +49,11 @@ reformat_data(
 
 - ...:
 
-  passed onto specific reformatting functions:
+  passed onto specific reformatting functions. All child functions
+  accept `categorical_mapping` (character vector or data.frame) for
+  converting categorical columns to numeric. See individual function
+  docs for details. Additional arguments passed to specific reformatting
+  functions:
 
   - `input_type = "nca"` and `output_type = "modeling"`:
     [`reformat_data_nca_to_modeling()`](https://insightrx.github.io/irxforge/reference/reformat_data_nca_to_modeling.md)

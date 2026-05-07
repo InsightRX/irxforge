@@ -11,12 +11,12 @@
 ## Citation
 
 Keizer R (2026). *irxforge: Forging data for pharmacometric analyses*. R
-package version 0.0.0.9006, <https://insightrx.github.io/irxforge/>.
+package version 0.0.0.9009, <https://insightrx.github.io/irxforge/>.
 
     @Manual{,
       title = {irxforge: Forging data for pharmacometric analyses},
       author = {Ron Keizer},
       year = {2026},
-      note = {R package version 0.0.0.9006},
+      note = {R package version 0.0.0.9009},
       url = {https://insightrx.github.io/irxforge/},
     }

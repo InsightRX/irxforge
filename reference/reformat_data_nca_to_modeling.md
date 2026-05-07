@@ -14,6 +14,7 @@ reformat_data_nca_to_modeling(
   obs_compartment = 1,
   covariates = NULL,
   repeat_doses = NULL,
+  categorical_mapping = NULL,
   na = "."
 )
 ```
@@ -51,6 +52,16 @@ reformat_data_nca_to_modeling(
   applies to column-wise dose data. Default `NULL` preserves existing
   behavior (no ADDL/II columns). Examples: `list(interval = 12)` or
   `list(n = 5, interval = 12)`.
+
+- categorical_mapping:
+
+  Either a character vector of column names to auto-encode (most common
+  value gets 0, next gets 1, etc.), or a data.frame with columns
+  `column`, `original_value`, `encoded_value` for explicit mappings. NA
+  values are encoded as -99. The final mapping is attached as a
+  `"categorical_mapping"` attribute on the returned data.frame. Default
+  `NULL` skips explicit encoding (existing blanket conversion still
+  applies).
 
 - na:
 

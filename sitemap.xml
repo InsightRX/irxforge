@@ -7,6 +7,10 @@
 <url><loc>https://insightrx.github.io/irxforge/index.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/news/index.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/add_nominal_timepoints.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/apply_categorical_mapping.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/apply_categorical_mapping_auto.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/apply_categorical_mapping_manual.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/apply_mapping_to_data.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/check_nm_dataset.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/create_demographics_table.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/detect_dataset_type.html</loc></url>
