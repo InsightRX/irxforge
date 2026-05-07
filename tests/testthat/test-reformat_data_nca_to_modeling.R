@@ -135,6 +135,66 @@ test_that("repeat_doses without interval raises an error", {
   )
 })
 
+test_that("categorical_mapping as character vector encodes specified columns with mode=0", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2, 3, 3),
+    TIME = c(0, 1, 0, 1, 0, 1),
+    AMT = c(100, 100, 200, 200, 100, 100),
+    DV = c(NA, 5, NA, 4, NA, 3),
+    SEX = c("M", "M", "F", "F", "M", "M"),
+    RACE = c("WHITE", "WHITE", "BLACK", "BLACK", "WHITE", "WHITE")
+  )
+  out <- reformat_data_nca_to_modeling(
+    data = dat,
+    covariates = c("SEX", "RACE"),
+    categorical_mapping = c("SEX", "RACE")
+  )
+  # SEX: M is most common (4 rows) -> 0, F -> 1
+  expect_true(all(out$SEX[out$ORIGID == 1] == 0 | out$SEX[out$ORIGID == 3] == 0))
+  # Mapping attribute attached
+  mapping <- attr(out, "categorical_mapping")
+  expect_true(is.data.frame(mapping))
+  expect_equal(names(mapping), c("column", "original_value", "encoded_value"))
+  expect_true("SEX" %in% mapping$column)
+  expect_true("RACE" %in% mapping$column)
+})
+
+test_that("categorical_mapping as data.frame applies user mapping in NCA reformatting", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2),
+    TIME = c(0, 1, 0, 1),
+    AMT = c(100, 100, 200, 200),
+    DV = c(NA, 5, NA, 4),
+    SEX = c("M", "M", "F", "F")
+  )
+  user_map <- data.frame(
+    column = c("SEX", "SEX"),
+    original_value = c("M", "F"),
+    encoded_value = c(0, 1)
+  )
+  out <- reformat_data_nca_to_modeling(
+    data = dat,
+    covariates = c("SEX"),
+    categorical_mapping = user_map
+  )
+  mapping <- attr(out, "categorical_mapping")
+  expect_true(is.data.frame(mapping))
+  expect_equal(nrow(mapping), 2)
+})
+
+test_that("categorical_mapping = NULL preserves existing blanket conversion", {
+  dat <- data.frame(
+    ID = c(1, 2),
+    TIME = c(0, 0),
+    AMT = c(100, 100),
+    DV = c(NA, 5),
+    SEX = c("M", "F")
+  )
+  out <- reformat_data_nca_to_modeling(data = dat, covariates = c("SEX"))
+  expect_true(is.numeric(out$SEX))
+  expect_null(attr(out, "categorical_mapping"))
+})
+
 test_that("reformat_data_nca_to_modeling handles multiple doses per subject", {
   # Create data with multiple dose events per subject (row-wise dosing)
   dat <- data.frame(

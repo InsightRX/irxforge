@@ -50,3 +50,49 @@ test_that("GROUP is created from dictionary mapping when missing", {
   expect_true("GROUP" %in% names(out))
   expect_equal(out$GROUP, dat$ARM)
 })
+
+test_that("categorical_mapping encodes character columns for NONMEM", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2),
+    EVID = c(1, 0, 1, 0),
+    DV = c(0, 5, 0, 4),
+    AMT = c(100, 0, 200, 0),
+    SEX = c("M", "M", "F", "F"),
+    RACE = c("WHITE", "WHITE", "BLACK", "BLACK")
+  )
+  out <- reformat_data_modeling_to_modeling(dat, categorical_mapping = c("SEX", "RACE"))
+  expect_true(is.numeric(out$SEX))
+  expect_true(is.numeric(out$RACE))
+  mapping <- attr(out, "categorical_mapping")
+  expect_true(is.data.frame(mapping))
+  expect_equal(names(mapping), c("column", "original_value", "encoded_value"))
+})
+
+test_that("categorical_mapping attribute survives NA-to-dot conversion", {
+  dat <- data.frame(
+    ID = c(1, 2),
+    EVID = c(0, 0),
+    DV = c(5, NA),
+    SEX = c("M", "F")
+  )
+  out <- reformat_data_modeling_to_modeling(dat, categorical_mapping = c("SEX"))
+  mapping <- attr(out, "categorical_mapping")
+  expect_true(is.data.frame(mapping))
+  expect_true(nrow(mapping) > 0)
+})
+
+test_that("categorical_mapping with data.frame input works in modeling_to_modeling", {
+  dat <- data.frame(
+    ID = c(1, 2, 3),
+    EVID = c(0, 0, 0),
+    DV = c(5, 4, 3),
+    SEX = c("M", "F", "M")
+  )
+  user_map <- data.frame(
+    column = c("SEX", "SEX"),
+    original_value = c("M", "F"),
+    encoded_value = c(0, 1)
+  )
+  out <- reformat_data_modeling_to_modeling(dat, categorical_mapping = user_map)
+  expect_equal(out$SEX, c(0, 1, 0))
+})

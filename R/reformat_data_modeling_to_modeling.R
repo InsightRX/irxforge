@@ -2,8 +2,14 @@
 #' dataset.
 #' 
 #' @param data dataset formatted as modeling-ready dataset
-#' @param dictionary a data dictionary that maps expected variable names to 
+#' @param dictionary a data dictionary that maps expected variable names to
 #' variables in the data.
+#' @param categorical_mapping Either a character vector of column names to
+#' auto-encode (most common value gets 0, next gets 1, etc.), or a data.frame
+#' with columns `column`, `original_value`, `encoded_value` for explicit
+#' mappings. NA values are encoded as -99. The final mapping is attached as a
+#' `"categorical_mapping"` attribute on the returned data.frame. Default `NULL`
+#' skips encoding.
 #' @param na what to set NA values to. E.g. ".", (default) or NA (keep NA),
 #' or NULL (do nothing).
 #' 
@@ -14,6 +20,7 @@
 reformat_data_modeling_to_modeling <- function(
   data,
   dictionary = NULL,
+  categorical_mapping = NULL,
   na = "."
 ) {
   
@@ -38,11 +45,18 @@ reformat_data_modeling_to_modeling <- function(
     }
   }
   
+  ## Apply categorical encoding
+  data <- apply_categorical_mapping(data, categorical_mapping)
+  cat_map <- attr(data, "categorical_mapping")
+
   ## Convert NA's to dots (or something else)
   if(!is.null(na)) {
     data <- data |>
       dplyr::mutate(dplyr::across(dplyr::everything(), ~ifelse(is.na(.) | . == "NA", na, .)))
   }
-  
+
+  ## Preserve categorical mapping attribute (dplyr may strip it)
+  if (!is.null(cat_map)) attr(data, "categorical_mapping") <- cat_map
+
   data
 } 

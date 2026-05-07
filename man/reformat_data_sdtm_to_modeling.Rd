@@ -4,13 +4,25 @@
 \alias{reformat_data_sdtm_to_modeling}
 \title{Reformat SDTM datasets into NONMEM-style modeling dataset}
 \usage{
-reformat_data_sdtm_to_modeling(data, dictionary, na = ".")
+reformat_data_sdtm_to_modeling(
+  data,
+  dictionary,
+  categorical_mapping = NULL,
+  na = "."
+)
 }
 \arguments{
 \item{data}{list containing data.frames with SDTM domains}
 
 \item{dictionary}{a data dictionary that maps expected variable names to
 variables in the data.}
+
+\item{categorical_mapping}{Either a character vector of column names to
+auto-encode (most common value gets 0, next gets 1, etc.), or a data.frame
+with columns \code{column}, \code{original_value}, \code{encoded_value} for explicit
+mappings. NA values are encoded as -99. The final mapping is attached as a
+\code{"categorical_mapping"} attribute on the returned data.frame. Default \code{NULL}
+skips encoding.}
 
 \item{na}{what to set NA values to. E.g. ".", (default) or NA (keep NA),
 or NULL (do nothing).}

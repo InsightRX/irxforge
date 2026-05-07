@@ -5,13 +5,25 @@
 \title{Reformat modeling dataset into a properly checked and validated modeling
 dataset.}
 \usage{
-reformat_data_modeling_to_modeling(data, dictionary = NULL, na = ".")
+reformat_data_modeling_to_modeling(
+  data,
+  dictionary = NULL,
+  categorical_mapping = NULL,
+  na = "."
+)
 }
 \arguments{
 \item{data}{dataset formatted as modeling-ready dataset}
 
 \item{dictionary}{a data dictionary that maps expected variable names to
 variables in the data.}
+
+\item{categorical_mapping}{Either a character vector of column names to
+auto-encode (most common value gets 0, next gets 1, etc.), or a data.frame
+with columns \code{column}, \code{original_value}, \code{encoded_value} for explicit
+mappings. NA values are encoded as -99. The final mapping is attached as a
+\code{"categorical_mapping"} attribute on the returned data.frame. Default \code{NULL}
+skips encoding.}
 
 \item{na}{what to set NA values to. E.g. ".", (default) or NA (keep NA),
 or NULL (do nothing).}

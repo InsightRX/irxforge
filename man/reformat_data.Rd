@@ -36,7 +36,10 @@ columns.
 \item{output_type}{type of output dataset. Can be either \code{"nca"} or
 \code{"modeling"}.}
 
-\item{...}{passed onto specific reformatting functions:
+\item{...}{passed onto specific reformatting functions. All child functions
+accept \code{categorical_mapping} (character vector or data.frame) for converting
+categorical columns to numeric. See individual function docs for details.
+Additional arguments passed to specific reformatting functions:
 \itemize{
 \item \code{input_type = "nca"} and \code{output_type = "modeling"}:
 \code{\link[=reformat_data_nca_to_modeling]{reformat_data_nca_to_modeling()}}

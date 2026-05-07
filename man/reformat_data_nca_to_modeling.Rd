@@ -13,6 +13,7 @@ reformat_data_nca_to_modeling(
   obs_compartment = 1,
   covariates = NULL,
   repeat_doses = NULL,
+  categorical_mapping = NULL,
   na = "."
 )
 }
@@ -35,6 +36,13 @@ contain \code{interval} (dosing interval in TIME units). Optionally contains \co
 as \code{ceiling(max(observation_time) / interval)}. Only applies to column-wise
 dose data. Default \code{NULL} preserves existing behavior (no ADDL/II columns).
 Examples: \code{list(interval = 12)} or \code{list(n = 5, interval = 12)}.}
+
+\item{categorical_mapping}{Either a character vector of column names to
+auto-encode (most common value gets 0, next gets 1, etc.), or a data.frame
+with columns \code{column}, \code{original_value}, \code{encoded_value} for explicit
+mappings. NA values are encoded as -99. The final mapping is attached as a
+\code{"categorical_mapping"} attribute on the returned data.frame. Default \code{NULL}
+skips explicit encoding (existing blanket conversion still applies).}
 
 \item{na}{what to set NA values to. E.g. ".", (default) or NA (keep NA),
 or NULL (do nothing).}
