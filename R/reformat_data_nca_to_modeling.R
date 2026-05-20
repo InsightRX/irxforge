@@ -146,7 +146,7 @@ reformat_data_nca_to_modeling <- function(
   ## Convert remaining character columns to categorical (but numeric)
   for(key in names(comb)) {
     if (key %in% already_encoded) next
-    if(! inherits(comb[[key]], "numeric")) {
+    if(! rlang::inherits_any(comb[[key]], c("integer", "numeric"))) {
       suppressWarnings(
         comb[[key]] <- match(comb[[key]], unique(comb[[key]]))
       )
