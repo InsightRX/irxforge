@@ -366,3 +366,48 @@ test_that("dictionary verbose output shows mapping", {
     "Dictionary mapping: ID -> SUBJ"
   )
 })
+
+# ── Non-numeric TIME robustness ───────────────────────────────────────────────
+
+test_that("non-numeric TIME with ADDL/II does not crash the check", {
+  # Two dose records so the overlap-expansion arithmetic is reached; a character
+  # TIME used to crash `time_vec + ADDL * II` and abort the whole function.
+  d <- data.frame(
+    ID = 1,
+    TIME = c("0", "5", "10"),       # character clock/date-style TIME
+    DV = c(NA, NA, 8),
+    MDV = c(1, 1, 0),
+    EVID = c(1, 1, 0),
+    AMT = c(100, 100, 0),
+    CMT = 1,
+    ADDL = c(5, 0, 0),
+    II = c(12, 0, 0),
+    stringsAsFactors = FALSE
+  )
+  res <- check_nm_dataset(d, verbose = FALSE)   # must not error
+  expect_s3_class(res, "data.frame")
+  expect_equal(res$result[res$check == "time_numeric"], "FAIL")
+})
+
+test_that("unique_records is skipped (NA) when TIME is non-numeric", {
+  d <- make_nm(n_id = 1)
+  d <- rbind(d, d[2, ])             # duplicate on a numeric key
+  d$TIME <- as.character(d$TIME)    # character clock-of-day TIME → unreliable key
+  res <- check_nm_dataset(d, verbose = FALSE)
+  expect_equal(res$result[res$check == "unique_records"], "NA")
+})
+
+test_that("unique_records is skipped (NA) when ID does not resolve", {
+  d <- make_nm()
+  names(d)[names(d) == "ID"] <- "NSID"   # no canonical ID, no dictionary
+  res <- check_nm_dataset(d, verbose = FALSE)
+  expect_equal(res$result[res$check == "unique_records"], "NA")
+})
+
+test_that("char_columns names the offending column(s)", {
+  d <- make_nm()
+  d$AMT_UNIT <- "mg"               # character label/unit sidecar column
+  res <- check_nm_dataset(d, verbose = FALSE)
+  expect_equal(res$result[res$check == "char_columns"], "FAIL")
+  expect_match(res$description[res$check == "char_columns"], "AMT_UNIT")
+})

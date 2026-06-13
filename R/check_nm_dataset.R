@@ -145,7 +145,14 @@ check_nm_dataset <- function(
   used_reserved <- intersect(cols, reserved)
   log_check(
     "reserved_names",
-    "No reserved NONMEM variable names used as column names",
+    if (length(used_reserved) == 0) {
+      "No reserved NONMEM variable names used as column names"
+    } else {
+      paste0(
+        "Reserved NONMEM variable name(s) used as column names: ",
+        paste(used_reserved, collapse = ", ")
+      )
+    },
     if (length(used_reserved) == 0) "PASS" else "FAIL"
   )
 
@@ -155,7 +162,15 @@ check_nm_dataset <- function(
   char_cols <- names(data)[vapply(data, is.character, logical(1))]
   log_check(
     "char_columns",
-    "No character-type columns present (may cause NONMEM compilation failure)",
+    if (length(char_cols) == 0) {
+      "No character-type columns present (may cause NONMEM compilation failure)"
+    } else {
+      paste0(
+        "Character-type column(s) present (a problem only if used as a NONMEM data item; ",
+        "label/unit sidecar columns are typically DROPped via $INPUT): ",
+        paste(char_cols, collapse = ", ")
+      )
+    },
     if (length(char_cols) == 0) "PASS" else "FAIL"
   )
 
@@ -511,7 +526,8 @@ check_nm_dataset <- function(
   # Overlapping ADDL-expanded doses
   # ──────────────────────────────────────────────────────────────────────────
   if (has_col("ADDL") && has_col("II") && has_col("EVID") && has_col("ID") &&
-      has_col("TIME") && is.numeric(get_col("ADDL")) && is.numeric(get_col("II"))) {
+      has_col("TIME") && is.numeric(get_col("ADDL")) && is.numeric(get_col("II")) &&
+      is.numeric(get_col("TIME"))) {
     overlap_found <- FALSE
     id_vec <- get_col("ID")
     time_vec <- get_col("TIME")
@@ -572,12 +588,34 @@ check_nm_dataset <- function(
   dup_nm_keys <- c("ID", "TIME", "CMT", "EVID")
   dup_actual <- vapply(dup_nm_keys, col_for, character(1))
   dup_cols <- dup_actual[dup_actual %in% names(data)]
-  if (length(dup_cols) >= 2) {
-    dup_check <- duplicated(data[, dup_cols, drop = FALSE])
+  id_resolves <- col_for("ID") %in% names(data)
+  time_numeric <- has_col("TIME") && is.numeric(get_col("TIME"))
+  if (!id_resolves || !time_numeric) {
+    # A duplicate-key check is only meaningful with a resolved subject ID *and* a
+    # numeric time. Without ID the key collapses across subjects; a character
+    # clock-of-day TIME ("9:08") collides spuriously. Skip rather than false-FAIL.
     log_check(
       "unique_records",
-      paste0("Unique combination of ", paste(dup_cols, collapse = ", ")),
-      if (!any(dup_check)) "PASS" else "FAIL"
+      paste0(
+        "Unique (ID, TIME, CMT, EVID) records — not evaluated: ",
+        if (!id_resolves) {
+          "ID does not resolve to a column"
+        } else {
+          "TIME is not numeric (point the check at the numeric analysis-time column)"
+        }
+      ),
+      "NA"
+    )
+  } else if (length(dup_cols) >= 2) {
+    dup_check <- duplicated(data[, dup_cols, drop = FALSE])
+    n_dup <- sum(dup_check)
+    log_check(
+      "unique_records",
+      paste0(
+        "Unique combination of ", paste(dup_cols, collapse = ", "),
+        if (n_dup > 0) paste0(" (", n_dup, " duplicate row(s))") else ""
+      ),
+      if (n_dup == 0) "PASS" else "FAIL"
     )
   }
 
@@ -641,7 +679,7 @@ check_nm_dataset <- function(
     c(all_standard, if (!is.null(exclusion_flag)) exclusion_flag)
   )
   if (length(cov_cols) > 0) {
-    has_missing_cov <- FALSE
+    missing_cov <- character(0)
     for (col in cov_cols) {
       vals <- data[[col]]
       has_sentinel <- FALSE
@@ -653,14 +691,20 @@ check_nm_dataset <- function(
       }
 
       if (any(is.na(vals)) || has_sentinel) {
-        has_missing_cov <- TRUE
-        break
+        missing_cov <- c(missing_cov, col)
       }
     }
     log_check(
       "covariate_missing",
-      "No missing or sentinel values (-999, -99, '.', 'NA') in covariate columns",
-      if (!has_missing_cov) "PASS" else "FAIL"
+      if (length(missing_cov) == 0) {
+        "No missing or sentinel values (-999, -99, '.', 'NA') in covariate columns"
+      } else {
+        paste0(
+          "Missing or sentinel values (-999, -99, '.', 'NA') in covariate column(s): ",
+          paste(missing_cov, collapse = ", ")
+        )
+      },
+      if (length(missing_cov) == 0) "PASS" else "FAIL"
     )
   }
 
