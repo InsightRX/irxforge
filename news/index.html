@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9009</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9010</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,7 +33,10 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="irxforge-development-version">irxforge (development version)<a class="anchor" aria-label="anchor" href="#irxforge-development-version"></a></h2>
-<ul><li>Initial CRAN submission.</li>
+<ul><li><p><code><a href="../reference/check_nm_dataset.html">check_nm_dataset()</a></code>: fixed a crash when <code>TIME</code> is non-numeric (e.g. date/clock strings) and <code>ADDL</code>/<code>II</code> are present — the overlapping-dose check now also guards on <code>is.numeric(TIME)</code> so the whole check no longer aborts before returning results.</p></li>
+<li><p><code><a href="../reference/check_nm_dataset.html">check_nm_dataset()</a></code>: the <code>unique_records</code> check now skips (returns <code>NA</code>) instead of emitting a false <code>FAIL</code> when the subject <code>ID</code> does not resolve or <code>TIME</code> is not numeric (a character clock-of-day TIME, or a key collapsed across subjects, produced spurious duplicates).</p></li>
+<li><p><code><a href="../reference/check_nm_dataset.html">check_nm_dataset()</a></code>: failing <code>char_columns</code>, <code>reserved_names</code>, and <code>covariate_missing</code> checks now name the offending column(s) in their <code>description</code>.</p></li>
+<li><p>Initial CRAN submission.</p></li>
 </ul></div>
   </main></div>
 
