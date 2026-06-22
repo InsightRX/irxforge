@@ -36,6 +36,9 @@
 #' @param design_match_covs character vector of baseline covariates to use for
 #'   propensity-score design matching. Default is all static and time-varying
 #'   covariates.
+#' @param design_id_var optional column name for retaining the observed subject
+#'   ID whose observation-time design was assigned to each simulated subject.
+#'   Default `NULL` omits this bookkeeping column.
 #' @param n_subjects number of simulated subjects. Default is the number of
 #'   unique observed subjects.
 #' @param cont_method method used to predict continuous covariates within mice,
@@ -69,6 +72,7 @@ sample_covariates_mice_timevarying <- function(
   measurement_pattern = c("change", "nonmissing", "all"),
   design_match = c("clone", "propensity"),
   design_match_covs = NULL,
+  design_id_var = NULL,
   n_subjects = length(unique(data[[id_var]])),
   cont_method = "pmm",
   replicates = 1,
@@ -94,6 +98,12 @@ sample_covariates_mice_timevarying <- function(
   if (!is.null(time_grid) && design_match == "propensity") {
     stop(
       "`design_match = \"propensity\"` can only be used when `time_grid = NULL`.",
+      call. = FALSE
+    )
+  }
+  if (!is.null(time_grid) && !is.null(design_id_var)) {
+    stop(
+      "`design_id_var` can only be used when `time_grid = NULL`.",
       call. = FALSE
     )
   }
@@ -209,6 +219,7 @@ sample_covariates_mice_timevarying <- function(
     } else {
       rep(
         list(list(
+          id = NA,
           time = time_grid,
           update = matrix(
             TRUE,
@@ -223,12 +234,23 @@ sample_covariates_mice_timevarying <- function(
 
     current <- baseline
     current[[id_var]] <- seq_len(n_subjects)
+    if (!is.null(design_id_var)) {
+      current[[design_id_var]] <- as.character(vapply(
+        subject_profiles,
+        function(x) x$id,
+        character(1)
+      ))
+    }
     current[[time_var]] <- vapply(
       subject_profiles,
       function(x) x$time[[1]],
       numeric(1)
     )
-    current <- current[, c(id_var, time_var, covs), drop = FALSE]
+    current <- current[
+      ,
+      c(id_var, if (!is.null(design_id_var)) design_id_var, time_var, covs),
+      drop = FALSE
+    ]
 
     profile_lengths <- vapply(subject_profiles, function(x) length(x$time), integer(1))
     replicate_rows <- vector("list", max(profile_lengths))
@@ -421,6 +443,7 @@ make_mice_observation_profiles <- function(
     profile <- profile |>
       dplyr::arrange(.data[[time_var]])
     list(
+      id = as.character(profile[[id_var]][[1]]),
       time = profile[[time_var]],
       update = make_mice_update_matrix(
         profile = profile,
