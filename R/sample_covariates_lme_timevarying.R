@@ -514,6 +514,16 @@ fit_lme_transition_models <- function(
       call. = FALSE
     )
   }
+
+  # Carry the predictor names and the categorical levels seen at fitting time so
+  # the simulation step can (a) detect rows with missing predictors and (b) map
+  # any baseline category that never appeared in the transitions to NA instead
+  # of letting predict() abort with "factor has new levels".
+  attr(models, "predictors") <- predictors
+  attr(models, "cat_levels") <- stats::setNames(
+    lapply(cat_static, function(col) levels(td[[col]])),
+    cat_static
+  )
   models
 }
 
@@ -560,33 +570,53 @@ simulate_lme_transition_step <- function(
   newdata[[".delta_time"]] <- time - previous_time
   newdata[lag_covs] <- current[time_varying_covs]
 
+  # Map any categorical static covariate value that was not seen when the models
+  # were fitted onto NA, using the training factor levels. Such rows then count
+  # as having a missing predictor and are carried forward below, instead of
+  # making predict() abort with "factor has new levels".
+  cat_levels <- attr(models, "cat_levels")
+  for (col in names(cat_levels)) {
+    if (col %in% names(newdata)) {
+      newdata[[col]] <- factor(
+        as.character(newdata[[col]]),
+        levels = cat_levels[[col]]
+      )
+    }
+  }
+
+  # predict() drops rows with missing predictors rather than padding them, so we
+  # predict only on rows whose model predictors are all present and leave the
+  # remaining rows at their carried-forward value.
+  predictors <- attr(models, "predictors")
+  complete <- if (length(predictors) > 0) {
+    stats::complete.cases(newdata[, predictors, drop = FALSE])
+  } else {
+    rep(TRUE, nrow(newdata))
+  }
+
   out <- current[, time_varying_covs, drop = FALSE]
   for (cov in time_varying_covs) {
     model <- models[[cov]]
-    if (is.null(model)) {
-      # No fitted model: carry the previous value forward.
+    if (is.null(model) || !any(complete)) {
+      # No fitted model (or no usable rows): carry the previous value forward.
       out[[cov]] <- current[[cov]]
       next
     }
-    # `na.exclude` pads predictions for rows with missing predictors back to
-    # `NA` instead of erroring; those covariates are then left unchanged by the
-    # caller's `!is.na()` update filter.
     mu <- if (model$type == "lme") {
       as.numeric(stats::predict(
         model$fit,
-        newdata = newdata,
-        level = 0,
-        na.action = stats::na.exclude
+        newdata = newdata[complete, , drop = FALSE],
+        level = 0
       ))
     } else {
       as.numeric(stats::predict(
         model$fit,
-        newdata = newdata,
-        na.action = stats::na.exclude
+        newdata = newdata[complete, , drop = FALSE]
       ))
     }
-    residual <- stats::rnorm(nrow(newdata), mean = 0, sd = model$sigma)
-    out[[cov]] <- mu + ranef[, cov] + residual
+    residual <- stats::rnorm(sum(complete), mean = 0, sd = model$sigma)
+    out[[cov]] <- current[[cov]]
+    out[[cov]][complete] <- mu + ranef[complete, cov] + residual
   }
   out
 }

@@ -337,3 +337,72 @@ test_that("propensity design matching runs end-to-end", {
   expect_equal(length(unique(out$ID)), 20)
   expect_false(anyNA(out$WT))
 })
+
+test_that("categorical level seen only at baseline does not crash prediction", {
+  # Subjects with category "X" are all single-timepoint, so they contribute no
+  # transition rows and "X" is never a fitting-time factor level. The baseline
+  # sampler can still draw "X", which previously made predict() abort with
+  # "factor has new levels". Such rows must instead carry forward unchanged.
+  rows <- list()
+  for (id in 1:30) {
+    t <- 0:3
+    sex <- if (id %% 2 == 0) "M" else "F"
+    rows[[length(rows) + 1]] <- data.frame(
+      ID = id, TIME = t, SEX = sex, WT = 75 + id %% 10 + 0.5 * t
+    )
+  }
+  for (id in 90:95) {
+    rows[[length(rows) + 1]] <- data.frame(ID = id, TIME = 0, SEX = "X", WT = 70)
+  }
+  dat <- do.call(rbind, rows)
+
+  out <- suppressWarnings(sample_covariates_lme_timevarying(
+    data = dat,
+    static_covs = "SEX",
+    time_varying_covs = "WT",
+    cat_covs = "SEX",
+    n_subjects = 36,
+    seed = 5
+  ))
+
+  expect_false(anyNA(out$WT))
+  # Subjects carrying the fitting-time-unseen level keep WT constant (LOCF).
+  x_ids <- unique(out$ID[out$SEX == "X"])
+  if (length(x_ids) > 0) {
+    spread <- tapply(out$WT[out$ID %in% x_ids], out$ID[out$SEX == "X"], function(x) {
+      length(unique(x))
+    })
+    expect_true(all(spread == 1))
+  }
+})
+
+test_that("a missing lag predictor carries the covariate forward, no recycling", {
+  # Directly exercise simulate_lme_transition_step with one subject whose lag
+  # predictor is NA: predict() drops that row, so the fix must leave the
+  # covariate unchanged rather than recycle another subject's prediction.
+  dat <- make_longitudinal_data(n = 20)
+  models <- fit_lme_transition_models(
+    transition_data = make_lme_transition_data(
+      dat[order(dat$ID, dat$TIME), ],
+      id_var = "ID", time_var = "TIME",
+      static_covs = "AGE", time_varying_covs = c("WT", "CRCL")
+    ),
+    id_var = "ID", time_var = "TIME", static_covs = "AGE",
+    time_varying_covs = c("WT", "CRCL"), cat_covs = NULL,
+    trend = "previous", random_intercept = TRUE
+  )
+  current <- data.frame(AGE = c(40, 50), WT = c(80, NA), CRCL = c(90, 95))
+  ranef <- matrix(0, nrow = 2, ncol = 2, dimnames = list(NULL, c("WT", "CRCL")))
+
+  out <- withr::with_seed(1, simulate_lme_transition_step(
+    models = models, current = current,
+    time = c(1, 1), previous_time = c(0, 0),
+    time_var = "TIME", static_covs = "AGE",
+    time_varying_covs = c("WT", "CRCL"), ranef = ranef
+  ))
+
+  expect_equal(nrow(out), 2)
+  # Row 2 has an NA WT lag -> all its time-varying covs carried forward.
+  expect_equal(out$WT[2], NA_real_)
+  expect_equal(out$CRCL[2], 95)
+})
