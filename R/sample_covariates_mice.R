@@ -83,38 +83,19 @@ sample_covariates_mice <- function(
     ]
   }
 
-  comb <- data |>
-    dplyr::mutate(Type = "Original") |>
-    dplyr::bind_rows(
-      mi_data |>
-        dplyr::mutate(Type = "Simulated")
-    ) |>
-    # TODO: mutate_at() is superseded by across()
-    dplyr::mutate_at(cat_covs, function(x) as.factor(x))
-
-  pred <- mice::make.predictorMatrix(comb)
-  pred[, c("Type")] <- 0
-  method <- mice::make.method(comb)
-  method[cont_covs] <- cont_method
-
-  ## Run MICE
-  suppressWarnings( ## mice throws warning about partial matching that (in R 4+)
-    imp_data <- mice::mice(
-      comb,
-      m = replicates,
-      printFlag = FALSE,
-      predictorMatrix = pred,
-      method = method,
-      ...
-    )
-  )
-
-  ## Refactor and return
-  out <- imp_data |>
-    tidyr::complete(action = "long") |>
-    dplyr::filter(.data$Type == "Simulated") |>
-    dplyr::select(-".id", -"Type", -".imp")
+  ## Run MICE via the shared runner used by the time-varying sampler too, so the
+  ## Type bookkeeping and predictor/method wiring cannot drift between the two.
+  out <- run_mice_simulation(
+    original = data,
+    simulated = mi_data,
+    cat_covs = cat_covs,
+    cont_covs = cont_covs,
+    cont_method = cont_method,
+    m = replicates,
+    ...
+  ) |>
+    dplyr::select(-".id", -".Type", -".imp")
   if (tibble::is_tibble(data)) out <- tibble::as_tibble(out)
   out
-  
+
 }

@@ -17,6 +17,7 @@ sample_covariates_mice_timevarying(
   design_match_covs = NULL,
   design_id_var = NULL,
   n_subjects = length(unique(data[[id_var]])),
+  conditional = NULL,
   cont_method = "pmm",
   replicates = 1,
   seed = NULL,
@@ -71,6 +72,11 @@ Default \code{NULL} omits this bookkeeping column.}
 
 \item{n_subjects}{number of simulated subjects. Default is the number of
 unique observed subjects.}
+
+\item{conditional}{list with conditional limits applied to the \strong{baseline}
+covariate sample, passed through to \code{\link[=sample_covariates_mice]{sample_covariates_mice()}}. Sequential
+transitions are not constrained. See \code{\link[=sample_covariates_mice]{sample_covariates_mice()}} for the
+accepted format.}
 
 \item{cont_method}{method used to predict continuous covariates within mice,
 default is \code{pmm}.}
