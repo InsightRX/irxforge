@@ -570,3 +570,20 @@ test_that("errors when covariates are both static and time-varying", {
     "both static and time-varying"
   )
 })
+
+test_that("errors when design_id_var collides with an existing column", {
+  dat <- data.frame(
+    ID = rep(1:2, each = 2),
+    TIME = rep(c(0, 1), times = 2),
+    WT = c(70, 71, 60, 61)
+  )
+
+  expect_error(
+    sample_covariates_mice_timevarying(
+      data = dat,
+      time_varying_covs = "WT",
+      design_id_var = "WT"
+    ),
+    "must not match"
+  )
+})
