@@ -439,9 +439,9 @@ test_that("transition data contains lagged covariates and elapsed time", {
     time_varying_covs = "WT"
   )
 
-  expect_named(out, c("TIME", "delta_time", "SEX", "WT_lag", "WT"))
-  expect_equal(out$delta_time, c(2, 3, 2, 3))
-  expect_equal(out$WT_lag, c(70, 72, 60, 63))
+  expect_named(out, c("TIME", ".delta_time", "SEX", ".WT_lag", "WT"))
+  expect_equal(out$.delta_time, c(2, 3, 2, 3))
+  expect_equal(out$.WT_lag, c(70, 72, 60, 63))
 })
 
 test_that("errors when transition sampling has no observed transitions", {
@@ -459,6 +459,99 @@ test_that("errors when transition sampling has no observed transitions", {
     ),
     "at least two timepoints"
   )
+})
+
+test_that("real mice path runs end-to-end and returns valid covariates", {
+  skip_if_not_installed("mice")
+
+  set.seed(1)
+  ids <- 1:30
+  dat <- do.call(rbind, lapply(ids, function(i) {
+    base_wt <- stats::rnorm(1, 70, 10)
+    base_scr <- stats::rnorm(1, 1, 0.2)
+    times <- c(0, 1, 2)
+    data.frame(
+      ID = i,
+      TIME = times,
+      SEX = sample(c("M", "F"), 1),
+      WT = base_wt + cumsum(c(0, stats::rnorm(2, 0, 1))),
+      SCR = base_scr + cumsum(c(0, stats::rnorm(2, 0, 0.05)))
+    )
+  }))
+
+  out <- sample_covariates_mice_timevarying(
+    data = dat,
+    static_covs = "SEX",
+    time_varying_covs = c("WT", "SCR"),
+    cat_covs = "SEX",
+    time_grid = c(0, 1, 2),
+    n_subjects = 10,
+    seed = 42
+  )
+
+  expect_named(out, c("ID", "TIME", "SEX", "WT", "SCR"))
+  expect_equal(nrow(out), 30)
+  expect_equal(sort(unique(out$ID)), 1:10)
+  expect_false(anyNA(out$WT))
+  expect_false(anyNA(out$SCR))
+  expect_true(all(out$SEX %in% c("M", "F")))
+  # internal working columns must not leak into the output
+  expect_false(any(c(".delta_time", ".Type", ".WT_lag", ".SCR_lag") %in% names(out)))
+})
+
+test_that("real mice path handles single-row subjects with default 'change' pattern", {
+  skip_if_not_installed("mice")
+
+  # mix of multi-row and single-row subjects with >=2 time-varying covs:
+  # regression test for the dim-collapse crash in make_mice_update_matrix().
+  dat <- data.frame(
+    ID = c(1, 1, 1, 2, 2, 3),
+    TIME = c(0, 1, 2, 0, 1, 0),
+    WT = c(70, 71, 72, 60, 61, 80),
+    SCR = c(1.0, 1.1, 1.2, 0.9, 0.95, 1.3)
+  )
+
+  expect_no_error(
+    out <- sample_covariates_mice_timevarying(
+      data = dat,
+      time_varying_covs = c("WT", "SCR"),
+      n_subjects = 3,
+      seed = 7
+    )
+  )
+  expect_setequal(names(out), c("ID", "TIME", "WT", "SCR"))
+})
+
+test_that("real mice path tolerates user covariates colliding with internal names", {
+  skip_if_not_installed("mice")
+
+  # user covariates named like the former internal working columns must not be
+  # silently overwritten now that internals are `.`-prefixed.
+  set.seed(3)
+  n_id <- 12
+  dat <- do.call(rbind, lapply(seq_len(n_id), function(i) {
+    data.frame(
+      ID = i,
+      TIME = c(0, 1, 2),
+      delta_time = stats::rnorm(3, 7, 2),
+      WT_lag = stats::rnorm(3, 42, 5),
+      WT = stats::rnorm(3, 70, 8)
+    )
+  }))
+
+  expect_no_error(
+    out <- sample_covariates_mice_timevarying(
+      data = dat,
+      time_varying_covs = c("delta_time", "WT_lag", "WT"),
+      time_grid = c(0, 1, 2),
+      n_subjects = 4,
+      seed = 11
+    )
+  )
+  expect_true(all(c("delta_time", "WT_lag", "WT") %in% names(out)))
+  # columns retained and not silently wiped to all-NA by an internal collision
+  expect_true(any(!is.na(out$delta_time)))
+  expect_true(any(!is.na(out$WT_lag)))
 })
 
 test_that("errors when covariates are both static and time-varying", {

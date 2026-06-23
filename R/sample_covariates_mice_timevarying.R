@@ -38,6 +38,10 @@
 #'   covariates.
 #' @param n_subjects number of simulated subjects. Default is the number of
 #'   unique observed subjects.
+#' @param conditional list with conditional limits applied to the **baseline**
+#'   covariate sample, passed through to [sample_covariates_mice()]. Sequential
+#'   transitions are not constrained. See [sample_covariates_mice()] for the
+#'   accepted format.
 #' @param cont_method method used to predict continuous covariates within mice,
 #'   default is `pmm`.
 #' @param replicates number of independent simulated datasets to sample.
@@ -70,6 +74,7 @@ sample_covariates_mice_timevarying <- function(
   design_match = c("clone", "propensity"),
   design_match_covs = NULL,
   n_subjects = length(unique(data[[id_var]])),
+  conditional = NULL,
   cont_method = "pmm",
   replicates = 1,
   seed = NULL,
@@ -189,6 +194,7 @@ sample_covariates_mice_timevarying <- function(
     baseline <- sample_covariates_mice(
       data = baseline_data,
       cat_covs = intersect(cat_covs, covs),
+      conditional = conditional,
       n_subjects = n_subjects,
       cont_method = cont_method,
       replicates = 1,
@@ -365,10 +371,10 @@ match_mice_profiles_by_propensity <- function(
   observed_pred <- pred[seq_len(nrow(observed)), , drop = FALSE]
   sampled_pred <- pred[seq(from = nrow(observed) + 1, length.out = nrow(sampled)), , drop = FALSE]
 
-  available <- seq_along(observed_scores)
+  used <- logical(length(observed_scores))
   match_idx <- integer(length(sampled_scores))
   for (i in seq_along(sampled_scores)) {
-    observed_candidates <- available
+    observed_candidates <- which(!used)
     score_diff <- abs(observed_scores[observed_candidates] - sampled_scores[[i]])
     best_score <- min(score_diff)
     candidates <- observed_candidates[
@@ -381,7 +387,7 @@ match_mice_profiles_by_propensity <- function(
       candidates <- candidates[[which.min(cov_dist)]]
     }
     match_idx[[i]] <- candidates
-    available <- setdiff(available, candidates)
+    used[candidates] <- TRUE
   }
   match_idx
 }
@@ -453,7 +459,14 @@ make_mice_update_matrix <- function(
   )
 
   if (is.null(dim(update))) {
-    update <- matrix(update, ncol = 1)
+    # `sapply()` over a single-row profile drops dims to a length-k vector; force
+    # the matrix shape explicitly so 1-row subjects with multiple covariates do
+    # not collapse to a k x 1 matrix that breaks the `colnames<-` below.
+    update <- matrix(
+      update,
+      nrow = nrow(profile),
+      ncol = length(time_varying_covs)
+    )
   }
   colnames(update) <- time_varying_covs
   update[1, ] <- TRUE
@@ -467,26 +480,26 @@ make_mice_transition_data <- function(
   static_covs,
   time_varying_covs
 ) {
-  lag_covs <- paste0(time_varying_covs, "_lag")
+  lag_covs <- paste0(".", time_varying_covs, "_lag")
 
   data |>
     dplyr::group_by(.data[[id_var]]) |>
     dplyr::arrange(.data[[time_var]], .by_group = TRUE) |>
     dplyr::mutate(
       .previous_time = dplyr::lag(.data[[time_var]]),
-      delta_time = .data[[time_var]] - .data$.previous_time
+      .delta_time = .data[[time_var]] - .data$.previous_time
     ) |>
     dplyr::mutate(
       dplyr::across(
         dplyr::all_of(time_varying_covs),
         dplyr::lag,
-        .names = "{.col}_lag"
+        .names = ".{.col}_lag"
       )
     ) |>
     dplyr::ungroup() |>
     dplyr::filter(!is.na(.data$.previous_time)) |>
     dplyr::select(
-      dplyr::all_of(c(time_var, "delta_time", static_covs, lag_covs, time_varying_covs))
+      dplyr::all_of(c(time_var, ".delta_time", static_covs, lag_covs, time_varying_covs))
     )
 }
 
@@ -502,41 +515,88 @@ impute_mice_transition_step <- function(
   cont_method,
   ...
 ) {
-  lag_covs <- paste0(time_varying_covs, "_lag")
+  lag_covs <- paste0(".", time_varying_covs, "_lag")
   synthetic <- current[, static_covs, drop = FALSE]
   synthetic[[time_var]] <- time
-  synthetic[["delta_time"]] <- time - previous_time
+  synthetic[[".delta_time"]] <- time - previous_time
   synthetic[lag_covs] <- current[time_varying_covs]
   synthetic[time_varying_covs] <- NA
   synthetic <- synthetic[
-    c(time_var, "delta_time", static_covs, lag_covs, time_varying_covs)
+    c(time_var, ".delta_time", static_covs, lag_covs, time_varying_covs)
   ]
 
-  factor_covs <- intersect(cat_covs, names(transition_data))
-  factor_lag_covs <- paste0(intersect(cat_covs, time_varying_covs), "_lag")
-  factor_covs <- intersect(c(factor_covs, factor_lag_covs), names(transition_data))
-  transition_data[factor_covs] <- lapply(transition_data[factor_covs], as.factor)
-  synthetic[factor_covs] <- lapply(synthetic[factor_covs], as.factor)
+  cat_lag_covs <- paste0(".", intersect(cat_covs, time_varying_covs), "_lag")
+  factor_covs <- intersect(c(cat_covs, cat_lag_covs), names(transition_data))
 
-  comb <- transition_data |>
-    dplyr::mutate(Type = "Original") |>
+  run_mice_simulation(
+    original = transition_data,
+    simulated = synthetic,
+    cat_covs = factor_covs,
+    cont_covs = setdiff(time_varying_covs, cat_covs),
+    cont_method = cont_method,
+    m = 1,
+    predicted_vars = time_varying_covs,
+    ...
+  ) |>
+    dplyr::select(dplyr::all_of(time_varying_covs))
+}
+
+#' Run a single MICE simulation pass shared by the (time-varying) mice samplers
+#'
+#' Binds observed (`original`) and to-be-imputed (`simulated`) rows via an
+#' internal `.Type` flag, runs one set of chained equations, and returns the
+#' completed simulated rows in long format. Centralising this here keeps the
+#' `Type` bookkeeping, predictor-matrix wiring, method selection and warning
+#' handling identical across `sample_covariates_mice()` and the time-varying
+#' transition sampler so the two paths cannot drift.
+#'
+#' @param original observed data used as the imputation donors.
+#' @param simulated rows whose target columns are `NA` and will be imputed.
+#' @param cat_covs categorical covariates to coerce to factors before fitting.
+#' @param cont_covs continuous covariates to impute with `cont_method`.
+#' @param cont_method mice method for continuous covariates (e.g. `"pmm"`).
+#' @param m number of imputations.
+#' @param predicted_vars optional character vector restricting which columns are
+#'   imputed (others are excluded as both targets and predictors). `NULL`
+#'   imputes every column with missing values.
+#' @param ... additional arguments passed to `mice::mice()`.
+#' @returns long-format completed data filtered to the simulated rows.
+#' @noRd
+run_mice_simulation <- function(
+  original,
+  simulated,
+  cat_covs,
+  cont_covs,
+  cont_method,
+  m = 1,
+  predicted_vars = NULL,
+  ...
+) {
+  comb <- original |>
+    dplyr::mutate(.Type = "Original") |>
     dplyr::bind_rows(
-      synthetic |>
-        dplyr::mutate(Type = "Simulated")
-    )
+      simulated |>
+        dplyr::mutate(.Type = "Simulated")
+    ) |>
+    dplyr::mutate(dplyr::across(dplyr::all_of(cat_covs), as.factor))
 
   pred <- mice::make.predictorMatrix(comb)
-  pred[, "Type"] <- 0
-  pred[setdiff(rownames(pred), time_varying_covs), ] <- 0
+  pred[, ".Type"] <- 0
+  if (!is.null(predicted_vars)) {
+    pred[setdiff(rownames(pred), predicted_vars), ] <- 0
+  }
 
   method <- mice::make.method(comb)
-  method[setdiff(names(method), time_varying_covs)] <- ""
-  method[setdiff(time_varying_covs, cat_covs)] <- cont_method
+  method[".Type"] <- ""
+  if (!is.null(predicted_vars)) {
+    method[setdiff(names(method), predicted_vars)] <- ""
+  }
+  method[intersect(cont_covs, names(method))] <- cont_method
 
   suppressWarnings(
     imp_data <- mice::mice(
       comb,
-      m = 1,
+      m = m,
       printFlag = FALSE,
       predictorMatrix = pred,
       method = method,
@@ -546,6 +606,5 @@ impute_mice_transition_step <- function(
 
   imp_data |>
     tidyr::complete(action = "long") |>
-    dplyr::filter(.data$Type == "Simulated") |>
-    dplyr::select(dplyr::all_of(time_varying_covs))
+    dplyr::filter(.data$.Type == "Simulated")
 }
