@@ -132,6 +132,71 @@ test_that("anonymize_dataset flags below-LLOQ observations", {
   expect_equal(out$CENS, c(0, 1, 0))
 })
 
+test_that("anonymize_dataset matches simulated DV by ID and TIME, not position", {
+  dat <- data.frame(
+    ID = c(1, 1, 1, 2, 2, 2),
+    TIME = c(0, 1, 2, 0, 1, 2),
+    EVID = c(1, 0, 0, 1, 0, 0),
+    AMT = c(100, 0, 0, 100, 0, 0),
+    DV = c(0, 5, 4, 0, 6, 7),
+    WT = c(70, 70, 70, 80, 80, 80)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) {
+      data.frame(
+        ID = c(1, 1, 1, 2, 2, 2),
+        .design_id = c(1, 1, 1, 2, 2, 2),
+        TIME = c(0, 1, 2, 0, 1, 2),
+        WT = c(70, 70, 70, 80, 80, 80)
+      )
+    },
+    # Return rows in a scrambled order: a positional copy would mis-assign.
+    simulate_anonymized_concentrations = function(...) {
+      data.frame(
+        ID = c(2, 1, 2, 1),
+        TIME = c(2, 2, 1, 1),
+        DV_SIM = c(40, 20, 30, 10)
+      )
+    }
+  )
+
+  out <- anonymize_dataset(dat, covariates = "WT", model_file = model)
+
+  # Each DV lands on its own ID/TIME regardless of sim row order.
+  expect_equal(out$DV, c(0, 10, 20, 0, 30, 40))
+})
+
+test_that("anonymize_dataset tolerates NA simulated concentrations", {
+  dat <- data.frame(
+    ID = c(1, 1, 1),
+    TIME = c(0, 1, 2),
+    EVID = c(1, 0, 0),
+    AMT = c(100, 0, 0),
+    DV = c(0, 5, 4),
+    WT = c(70, 70, 70)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) {
+      data.frame(ID = c(1, 1, 1), .design_id = c(1, 1, 1), TIME = c(0, 1, 2), WT = 70)
+    },
+    simulate_anonymized_concentrations = function(...) {
+      data.frame(ID = c(1, 1), TIME = c(1, 2), DV_SIM = c(NA_real_, 2))
+    }
+  )
+
+  # NA DV must not crash the cens path nor inject all-NA rows on drop.
+  cens <- anonymize_dataset(dat, covariates = "WT", model_file = model, lloq = 1, censoring = "cens")
+  expect_equal(cens$CENS, c(0, 0, 0))
+  drop <- anonymize_dataset(dat, covariates = "WT", model_file = model, lloq = 1, censoring = "drop")
+  expect_equal(nrow(drop), 3)
+})
+
 test_that("anonymize_dataset validates inputs", {
   dat <- data.frame(ID = 1, TIME = 0, EVID = 1, AMT = 100, DV = 0, WT = 70)
   model <- tempfile(fileext = ".ferx")

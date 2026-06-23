@@ -157,6 +157,12 @@ sample_covariates_mice_timevarying <- function(
       call. = FALSE
     )
   }
+  if (!is.null(design_id_var) && design_id_var %in% c(id_var, time_var, covs)) {
+    stop(
+      "`design_id_var` must not match `id_var`, `time_var`, or a covariate name.",
+      call. = FALSE
+    )
+  }
 
   data <- data |>
     dplyr::arrange(.data[[id_var]], .data[[time_var]])
@@ -219,7 +225,7 @@ sample_covariates_mice_timevarying <- function(
     } else {
       rep(
         list(list(
-          id = NA,
+          id = NA_character_,
           time = time_grid,
           update = matrix(
             TRUE,

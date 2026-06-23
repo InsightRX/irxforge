@@ -16,7 +16,8 @@
 #'   `"drop"` removes below-LLOQ observation rows. `"cens"` adds a `CENS`
 #'   column, with `1` for below-LLOQ observations and `0` otherwise.
 #' @param seed optional integer seed used for covariate sampling and FeRx
-#'   simulation.
+#'   simulation. `NULL` (default) does not seed, so each call draws
+#'   independently.
 #' @param ... additional arguments passed to
 #'   [sample_covariates_mice_timevarying()].
 #'
@@ -53,9 +54,6 @@ anonymize_dataset <- function(
 
   id_var <- dictionary$ID
   time_var <- dictionary$TIME
-  evid_var <- dictionary$EVID
-  amt_var <- dictionary$AMT
-  dv_var <- dictionary$DV
 
   sample_data <- as.data.frame(data[, c(id_var, time_var, covariates), drop = FALSE])
   cat_covs <- covariates[
@@ -92,14 +90,12 @@ anonymize_dataset <- function(
   )
   anonymized <- apply_simulated_concentrations(
     data = anonymized,
-    sim = sim,
-    dictionary = dictionary
+    sim = sim
   )
   apply_anonymize_lloq(
     data = anonymized,
     lloq = lloq,
-    censoring = censoring,
-    dictionary = dictionary
+    censoring = censoring
   )
 }
 
@@ -188,24 +184,34 @@ build_anonymized_simulation_input <- function(data, sampled_covs, covariates, di
   optional_event_cols <- intersect(c(rate_var, "CMT", "MDV", "ADDL", "II", "SS"), names(data))
   event_cols <- unique(c(id_var, time_var, evid_var, amt_var, optional_event_cols))
 
-  out <- vector("list", length(unique(sampled_covs[[id_var]])))
+  # Pre-split both frames so each simulated subject is an O(1) lookup rather
+  # than a full-table scan. Designs are keyed on the character form of the ID
+  # because `.design_id` is stored as character by the sampler.
+  sim_ids <- unique(sampled_covs[[id_var]])
+  sampled_split <- split(sampled_covs, as.character(sampled_covs[[id_var]]))
+  data_split <- split(data, as.character(data[[id_var]]))
+
+  out <- vector("list", length(sim_ids))
+  skipped <- character(0)
   i <- 1L
-  for (sim_id in unique(sampled_covs[[id_var]])) {
-    cov_rows <- sampled_covs[sampled_covs[[id_var]] == sim_id, , drop = FALSE]
-    design_id <- cov_rows[[".design_id"]][[1]]
-    design_rows <- data[data[[id_var]] == design_id, , drop = FALSE]
-    design_rows <- design_rows[order(design_rows[[time_var]]), , drop = FALSE]
-    if (nrow(design_rows) != nrow(cov_rows)) {
-      stop(
-        "Matched design row count does not match sampled covariate row count.",
-        call. = FALSE
-      )
+  for (sim_id in sim_ids) {
+    cov_rows <- sampled_split[[as.character(sim_id)]]
+    design_id <- as.character(cov_rows[[".design_id"]][[1]])
+    design_rows <- data_split[[design_id]]
+    if (is.null(design_rows)) {
+      skipped <- c(skipped, as.character(sim_id))
+      next
     }
-    if (!isTRUE(all.equal(design_rows[[time_var]], cov_rows[[time_var]], check.attributes = FALSE))) {
-      stop(
-        "Matched design times do not match sampled covariate times.",
-        call. = FALSE
-      )
+    design_rows <- design_rows[order(design_rows[[time_var]]), , drop = FALSE]
+    aligned <- nrow(design_rows) == nrow(cov_rows) &&
+      isTRUE(all.equal(
+        design_rows[[time_var]],
+        cov_rows[[time_var]],
+        check.attributes = FALSE
+      ))
+    if (!aligned) {
+      skipped <- c(skipped, as.character(sim_id))
+      next
     }
 
     events <- design_rows[, event_cols, drop = FALSE]
@@ -221,6 +227,14 @@ build_anonymized_simulation_input <- function(data, sampled_covs, covariates, di
     out[[i]] <- cbind(events, cov_out)
     i <- i + 1L
   }
+  if (length(skipped) > 0) {
+    warning(
+      "Dropped ", length(skipped), " simulated subject(s) whose matched design ",
+      "could not be aligned with the sampled covariate times: ",
+      paste(skipped, collapse = ", "),
+      call. = FALSE
+    )
+  }
   out <- dplyr::bind_rows(out)
   order_cols <- unique(c("ID", "TIME", "EVID", "AMT", "RATE", "DV", "CMT", "MDV", "ADDL", "II", "SS", covariates))
   out[, intersect(order_cols, names(out)), drop = FALSE]
@@ -230,39 +244,65 @@ simulate_anonymized_concentrations <- function(model_file, data, seed = NULL) {
   if (!requireNamespace("ferx", quietly = TRUE)) {
     stop("Package `ferx` is required to simulate anonymized concentrations.", call. = FALSE)
   }
-  sim_seed <- if (is.null(seed)) 42L else as.integer(seed)
   sim_data <- data
   sim_data_path <- tempfile(fileext = ".csv")
   utils::write.csv(sim_data, sim_data_path, row.names = FALSE, na = ".")
-  ferx::ferx_simulate(
+  sim_args <- list(
     model = model_file,
     data = sim_data_path,
-    n_sim = 1L,
-    seed = sim_seed
+    n_sim = 1L
   )
+  if (!is.null(seed)) sim_args$seed <- as.integer(seed)
+  do.call(ferx::ferx_simulate, sim_args)
 }
 
-apply_simulated_concentrations <- function(data, sim, dictionary) {
-  obs_idx <- which(data$EVID == 0)
+apply_simulated_concentrations <- function(data, sim) {
   if (!"DV_SIM" %in% names(sim)) {
     stop("FeRx simulation output must contain a `DV_SIM` column.", call. = FALSE)
   }
+  obs_idx <- which(data$EVID == 0)
   if (length(obs_idx) != nrow(sim)) {
     stop(
       "FeRx simulation row count does not match the number of observation records.",
       call. = FALSE
     )
   }
-  data[["DV"]][obs_idx] <- sim[["DV_SIM"]]
+  # Match simulated concentrations back onto observation rows by ID and TIME
+  # rather than by position: FeRx is not guaranteed to return rows in the input
+  # order, so a positional copy can silently scramble subjects/timepoints.
+  if (all(c("ID", "TIME") %in% names(sim))) {
+    obs <- data[obs_idx, c("ID", "TIME"), drop = FALSE]
+    obs[[".obs_order"]] <- seq_along(obs_idx)
+    merged <- merge(
+      obs,
+      sim[, c("ID", "TIME", "DV_SIM"), drop = FALSE],
+      by = c("ID", "TIME"),
+      sort = FALSE
+    )
+    if (nrow(merged) != length(obs_idx)) {
+      stop(
+        "FeRx simulation output could not be uniquely matched to observation ",
+        "records by ID and TIME.",
+        call. = FALSE
+      )
+    }
+    merged <- merged[order(merged[[".obs_order"]]), , drop = FALSE]
+    data[["DV"]][obs_idx] <- merged$DV_SIM
+  } else {
+    data[["DV"]][obs_idx] <- sim[["DV_SIM"]]
+  }
   data
 }
 
-apply_anonymize_lloq <- function(data, lloq, censoring, dictionary) {
+apply_anonymize_lloq <- function(data, lloq, censoring) {
   if (is.null(lloq)) {
     return(data)
   }
   obs <- data$EVID == 0
-  blq <- obs & data$DV < lloq
+  # Guard against NA simulated concentrations: an NA `DV` would otherwise make
+  # `blq` contain NA, which inserts all-NA rows on the drop path and errors on
+  # the cens path ("NAs are not allowed in subscripted assignments").
+  blq <- obs & !is.na(data$DV) & data$DV < lloq
   if (censoring == "drop") {
     return(data[!blq, , drop = FALSE])
   }

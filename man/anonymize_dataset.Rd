@@ -35,7 +35,8 @@ optionally \code{RATE}. Defaults use the same names.}
 column, with \code{1} for below-LLOQ observations and \code{0} otherwise.}
 
 \item{seed}{optional integer seed used for covariate sampling and FeRx
-simulation.}
+simulation. \code{NULL} (default) does not seed, so each call draws
+independently.}
 
 \item{...}{additional arguments passed to
 \code{\link[=sample_covariates_mice_timevarying]{sample_covariates_mice_timevarying()}}.}
