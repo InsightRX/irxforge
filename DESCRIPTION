@@ -1,6 +1,6 @@
 Package: irxforge
 Title: Forging data for pharmacometric analyses
-Version: 0.0.0.9013
+Version: 0.0.0.9015
 Authors@R: c(
     person("Ron", "Keizer", email = "ron@insight-rx.com", role = c("cre", "aut")),
     person("Michael", "McCarthy", email = "michael.mccarthy@insight-rx.com", role = "ctb"),
@@ -17,6 +17,7 @@ Imports:
     lubridate,
     mice (>= 3.7.5),
     mvtnorm,
+    nlme,
     rlang,
     stringr,
     tibble,
@@ -28,7 +29,8 @@ Suggests:
     testthat (>= 3.2.0),
     withr
 Remotes:
-  InsightRX/irxutils
+  InsightRX/irxutils,
+  InsightRX/ferx
 Config/testthat/edition: 3
 Encoding: UTF-8
 LazyData: true
