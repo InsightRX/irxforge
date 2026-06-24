@@ -17,6 +17,8 @@ sample_covariates_mice_timevarying(
   design_match_covs = NULL,
   design_id_var = NULL,
   n_subjects = length(unique(data[[id_var]])),
+  baseline_method = c("mice", "bootstrap"),
+  noise = NULL,
   conditional = NULL,
   cont_method = "pmm",
   replicates = 1,
@@ -73,10 +75,21 @@ Default \code{NULL} omits this bookkeeping column.}
 \item{n_subjects}{number of simulated subjects. Default is the number of
 unique observed subjects.}
 
+\item{baseline_method}{how baseline covariates are sampled. \code{"mice"}
+(default) generates baselines with \code{\link[=sample_covariates_mice]{sample_covariates_mice()}}. \code{"bootstrap"}
+resamples observed baseline rows with replacement via
+\code{\link[=sample_covariates_bootstrap]{sample_covariates_bootstrap()}}, which reproduces the observed joint
+baseline distribution instead of shrinking it toward the multivariate mean
+as full-row MICE imputation tends to, especially in small datasets.}
+
+\item{noise}{optional single non-negative number giving the log-scale SD of
+multiplicative log-normal noise applied to the \strong{baseline} continuous
+covariates (e.g. \code{0.05} for ~5\%) to obscure original values. \code{NULL}
+(default) applies no noise. Sequential transitions are not jittered.}
+
 \item{conditional}{list with conditional limits applied to the \strong{baseline}
-covariate sample, passed through to \code{\link[=sample_covariates_mice]{sample_covariates_mice()}}. Sequential
-transitions are not constrained. See \code{\link[=sample_covariates_mice]{sample_covariates_mice()}} for the
-accepted format.}
+covariate sample. Sequential transitions are not constrained. See
+\code{\link[=sample_covariates_mice]{sample_covariates_mice()}} for the accepted format.}
 
 \item{cont_method}{method used to predict continuous covariates within mice,
 default is \code{pmm}.}
