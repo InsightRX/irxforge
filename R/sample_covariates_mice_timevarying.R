@@ -48,9 +48,10 @@
 #'   baseline distribution instead of shrinking it toward the multivariate mean
 #'   as full-row MICE imputation tends to, especially in small datasets.
 #' @param noise optional single non-negative number giving the log-scale SD of
-#'   multiplicative log-normal noise applied to the **baseline** continuous
-#'   covariates (e.g. `0.05` for ~5%) to obscure original values. `NULL`
-#'   (default) applies no noise. Sequential transitions are not jittered.
+#'   multiplicative log-normal noise (e.g. `0.05` for ~5%) applied to the
+#'   simulated output values to obscure them. `NULL` (default) applies no noise.
+#'   Time-varying covariates are jittered independently at each timepoint; static
+#'   covariates are jittered once per subject so they stay constant over time.
 #' @param conditional list with conditional limits applied to the **baseline**
 #'   covariate sample. Sequential transitions are not constrained. See
 #'   [sample_covariates_mice()] for the accepted format.
@@ -226,7 +227,6 @@ sample_covariates_mice_timevarying <- function(
       conditional = conditional,
       n_subjects = n_subjects,
       cont_method = cont_method,
-      noise = noise,
       ...
     )
 
@@ -327,7 +327,13 @@ sample_covariates_mice_timevarying <- function(
       }
     }
 
-    out[[replicate_idx]] <- dplyr::bind_rows(replicate_rows)
+    out[[replicate_idx]] <- apply_timevarying_noise(
+      data = dplyr::bind_rows(replicate_rows),
+      id_var = id_var,
+      static_covs = static_covs,
+      time_varying_covs = time_varying_covs,
+      noise = noise
+    )
     if (replicates > 1) {
       out[[replicate_idx]][[".replicate"]] <- replicate_idx
     }

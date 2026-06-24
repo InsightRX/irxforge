@@ -41,8 +41,8 @@ apply_covariate_noise <- function(data, noise, cat_covs = NULL) {
 #' `"bootstrap"` resamples observed baseline rows with replacement, which
 #' preserves the observed joint distribution of the baseline covariates instead
 #' of shrinking it toward the multivariate mean as full-row MICE imputation
-#' does. In both cases, optional multiplicative `noise` obscures the continuous
-#' values.
+#' does. Output-level `noise` is applied separately to the assembled
+#' trajectories by [apply_timevarying_noise()], not here.
 #'
 #' @noRd
 sample_tv_baseline <- function(
@@ -52,7 +52,6 @@ sample_tv_baseline <- function(
   conditional,
   n_subjects,
   cont_method,
-  noise,
   ...
 ) {
   if (baseline_method == "bootstrap") {
@@ -61,7 +60,7 @@ sample_tv_baseline <- function(
       n_subjects = n_subjects,
       conditional = conditional,
       cat_covs = cat_covs,
-      noise = noise,
+      noise = NULL,
       seed = NULL,
       na.rm = TRUE
     )
@@ -72,7 +71,7 @@ sample_tv_baseline <- function(
     }
     return(out)
   }
-  out <- sample_covariates_mice(
+  sample_covariates_mice(
     data = baseline_data,
     cat_covs = cat_covs,
     conditional = conditional,
@@ -82,5 +81,46 @@ sample_tv_baseline <- function(
     seed = NULL,
     ...
   )
-  apply_covariate_noise(out, noise = noise, cat_covs = cat_covs)
+}
+
+#' Apply multiplicative noise to a long-format simulated trajectory dataset
+#'
+#' Obscures the simulated output values. Each continuous time-varying covariate
+#' is jittered independently at every timepoint (measurement-like scatter), while
+#' each continuous static covariate is jittered once per subject so it stays
+#' constant over time. Categorical and non-numeric columns are left untouched.
+#'
+#' @noRd
+apply_timevarying_noise <- function(
+  data,
+  id_var,
+  static_covs,
+  time_varying_covs,
+  noise
+) {
+  if (is.null(noise)) {
+    return(data)
+  }
+  if (!is.numeric(noise) || length(noise) != 1 || is.na(noise) || noise < 0) {
+    stop("`noise` must be a single non-negative number.", call. = FALSE)
+  }
+  if (noise == 0) {
+    return(data)
+  }
+
+  ids <- as.character(data[[id_var]])
+  for (cov in intersect(static_covs, names(data))) {
+    if (!is.numeric(data[[cov]])) next
+    uid <- unique(ids)
+    factor_by_id <- stats::setNames(
+      exp(stats::rnorm(length(uid), mean = 0, sd = noise)),
+      uid
+    )
+    data[[cov]] <- data[[cov]] * factor_by_id[ids]
+  }
+  for (cov in intersect(time_varying_covs, names(data))) {
+    if (!is.numeric(data[[cov]])) next
+    data[[cov]] <- data[[cov]] * exp(stats::rnorm(nrow(data), mean = 0, sd = noise))
+  }
+  data
 }

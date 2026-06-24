@@ -57,6 +57,31 @@ test_that("baseline_method = 'bootstrap' draws baselines from observed values", 
   expect_true(all(base %in% dat$WT))
 })
 
+test_that("noise jitters time-varying output at every timepoint, statics per subject", {
+  dat <- data.frame(
+    ID = rep(1:8, each = 3),
+    TIME = rep(c(0, 1, 2), 8),
+    SEX = rep(c("M", "F"), each = 12),
+    AGE = rep(seq(40, 75, length.out = 8), each = 3),
+    WT = rep(seq(50, 120, length.out = 8), each = 3)
+  )
+  base_args <- list(
+    data = dat, static_covs = c("SEX", "AGE"), time_varying_covs = "WT",
+    cat_covs = "SEX", time_grid = c(0, 1, 2), n_subjects = 8, seed = 3
+  )
+  plain <- do.call(sample_covariates_mice_timevarying, base_args)
+  noisy <- do.call(sample_covariates_mice_timevarying, c(base_args, noise = 0.05))
+
+  # Time-varying covariate is perturbed at non-baseline timepoints too.
+  later <- plain$TIME > 0
+  expect_false(isTRUE(all.equal(plain$WT[later], noisy$WT[later])))
+  # Continuous static covariate stays constant within each subject.
+  age_levels <- tapply(noisy$AGE, noisy$ID, function(x) length(unique(round(x, 8))))
+  expect_true(all(age_levels == 1))
+  # Static covariate IS obscured between subjects (jittered off the originals).
+  expect_false(isTRUE(all.equal(sort(unique(noisy$AGE)), sort(unique(dat$AGE)))))
+})
+
 test_that("baseline noise obscures bootstrapped baseline values", {
   dat <- data.frame(
     ID = rep(1:6, each = 2),

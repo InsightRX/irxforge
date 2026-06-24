@@ -83,9 +83,10 @@ baseline distribution instead of shrinking it toward the multivariate mean
 as full-row MICE imputation tends to, especially in small datasets.}
 
 \item{noise}{optional single non-negative number giving the log-scale SD of
-multiplicative log-normal noise applied to the \strong{baseline} continuous
-covariates (e.g. \code{0.05} for ~5\%) to obscure original values. \code{NULL}
-(default) applies no noise. Sequential transitions are not jittered.}
+multiplicative log-normal noise (e.g. \code{0.05} for ~5\%) applied to the
+simulated output values to obscure them. \code{NULL} (default) applies no noise.
+Time-varying covariates are jittered independently at each timepoint; static
+covariates are jittered once per subject so they stay constant over time.}
 
 \item{conditional}{list with conditional limits applied to the \strong{baseline}
 covariate sample. Sequential transitions are not constrained. See
