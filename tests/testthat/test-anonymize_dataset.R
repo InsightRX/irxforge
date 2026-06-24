@@ -112,11 +112,58 @@ test_that("n_candidates selects the covariate sample closest to observed data", 
     dictionary = list(ID = "SUBJ", TIME = "TAD", EVID = "EVENT",
                       AMT = "DOSE", DV = "CONC"),
     n_candidates = 2,
+    score_on = "covariate",
     seed = 1
   )
 
   expect_equal(call_idx, 2) # both candidates were drawn
   expect_equal(out$WT, c(70, 70, 71, 80, 80, 81)) # the near candidate was picked
+  expect_equal(attr(out, "similarity_score"), 0, tolerance = 1e-8)
+})
+
+test_that("score_on = 'concentration' picks the candidate with the closest sim conc", {
+  dat <- data.frame(
+    SUBJ = c("A", "A", "A", "B", "B", "B"),
+    TAD = c(0, 1, 2, 0, 1, 2),
+    EVENT = c(1, 0, 0, 1, 0, 0),
+    DOSE = c(100, 0, 0, 200, 0, 0),
+    CONC = c(0, 10, 8, 0, 12, 9), # observed concentrations
+    WT = c(70, 70, 71, 80, 80, 81)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  candidate <- data.frame(
+    SUBJ = c(1, 1, 1, 2, 2, 2),
+    .design_id = c("A", "A", "A", "B", "B", "B"),
+    TAD = c(0, 1, 2, 0, 1, 2),
+    WT = c(72, 72, 73, 78, 78, 79)
+  )
+  sim_idx <- 0
+
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) candidate,
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      sim_idx <<- sim_idx + 1
+      dv <- if (sim_idx == 1) c(100, 100, 100, 100) else c(10, 8, 12, 9)
+      data.frame(ID = c(1, 1, 2, 2), TIME = c(1, 2, 1, 2), DV_SIM = dv)
+    }
+  )
+
+  out <- anonymize_dataset(
+    data = dat,
+    covariates = "WT",
+    model_file = model,
+    dictionary = list(ID = "SUBJ", TIME = "TAD", EVID = "EVENT",
+                      AMT = "DOSE", DV = "CONC"),
+    n_candidates = 2,
+    score_on = "concentration",
+    seed = 1
+  )
+
+  expect_equal(sim_idx, 2) # every candidate was simulated
+  # the second candidate's concentrations match the observed data, so it wins
+  expect_equal(out$DV[out$EVID == 0], c(10, 8, 12, 9))
   expect_equal(attr(out, "similarity_score"), 0, tolerance = 1e-8)
 })
 

@@ -19,21 +19,26 @@
 #'   and simulated concentrations (`DV`) to, via [signif()], to further obscure
 #'   the values. Default `4`. `NULL` disables rounding. Rounding is applied
 #'   before the `lloq` comparison.
-#' @param n_candidates number of independent covariate samples to draw and score
-#'   against the observed covariate data, keeping the closest match. Default `1`
-#'   (no scoring; a single sample is used). When greater than 1, the covariates
-#'   are resampled `n_candidates` times and the candidate with the smallest
-#'   distance to the observed covariate distribution is selected before the (one)
-#'   PK simulation is run. The chosen candidate's score is attached to the result
-#'   as the `"similarity_score"` attribute.
+#' @param n_candidates number of independent candidates to draw and score against
+#'   the observed data, keeping the closest match. Default `1` (no scoring; a
+#'   single candidate is used). When greater than 1, the candidate with the
+#'   smallest distance to the observed data (see `score_on`) is selected. The
+#'   chosen candidate's score is attached to the result as the
+#'   `"similarity_score"` attribute.
 #' @param similarity distribution-similarity metric used to score candidates.
 #'   `"energy"` (default) is the energy distance between the observed and
-#'   simulated per-subject covariate-trajectory feature matrices (baseline, mean,
-#'   slope and within-subject SD of each continuous covariate, and the
-#'   per-subject time fraction in each level of categorical covariates),
-#'   standardized by the observed spread. Lower is closer. The score is
-#'   population-level, not per-subject, so it does not push individual simulated
-#'   subjects toward specific real subjects.
+#'   simulated feature matrices, standardized by the observed spread. Lower is
+#'   closer. The score is population-level, not per-subject, so it does not push
+#'   individual simulated subjects toward specific real subjects.
+#' @param score_on what to score candidates on when `n_candidates > 1`.
+#'   `"concentration"` (default) scores the simulated concentration-time data:
+#'   each candidate is fully simulated and its `(time, log concentration)`
+#'   observation cloud is compared to the observed concentrations, so the PK
+#'   simulation is run once per candidate. `"covariate"` scores only the sampled
+#'   covariate trajectories (baseline, mean, slope and within-subject SD per
+#'   continuous covariate; per-subject time fraction in each level per
+#'   categorical covariate), which is cheaper because the PK simulation is then
+#'   run only once, on the selected covariate sample.
 #' @param seed optional integer seed used for covariate sampling and FeRx
 #'   simulation. `NULL` (default) does not seed, so each call draws
 #'   independently.
@@ -60,11 +65,13 @@ anonymize_dataset <- function(
   sigdig = 4,
   n_candidates = 1,
   similarity = c("energy"),
+  score_on = c("concentration", "covariate"),
   seed = NULL,
   ...
 ) {
   censoring <- match.arg(censoring)
   similarity <- match.arg(similarity)
+  score_on <- match.arg(score_on)
   if (!is.null(sigdig) &&
       (!is.numeric(sigdig) || length(sigdig) != 1 || is.na(sigdig) ||
        sigdig < 1 || sigdig != round(sigdig))) {
@@ -94,38 +101,25 @@ anonymize_dataset <- function(
     }, logical(1))
   ]
 
-  sampled_covs <- select_best_covariate_sample(
+  selected <- select_best_candidate(
+    data = data,
     sample_data = sample_data,
-    observed = data,
     covariates = covariates,
     cat_covs = cat_covs,
+    dictionary = dictionary,
+    model_file = model_file,
     id_var = id_var,
     time_var = time_var,
     n_subjects = length(unique(data[[id_var]])),
     n_candidates = n_candidates,
     similarity = similarity,
+    score_on = score_on,
     seed = seed,
     ...
   )
 
-  anonymized <- build_anonymized_simulation_input(
-    data = data,
-    sampled_covs = sampled_covs,
-    covariates = covariates,
-    dictionary = dictionary
-  )
-
-  sim <- simulate_anonymized_concentrations(
-    model_file = model_file,
-    data = anonymized,
-    seed = seed
-  )
-  anonymized <- apply_simulated_concentrations(
-    data = anonymized,
-    sim = sim
-  )
   anonymized <- apply_anonymize_sigdig(
-    data = anonymized,
+    data = selected$data,
     covariates = covariates,
     sigdig = sigdig
   )
@@ -134,8 +128,138 @@ anonymize_dataset <- function(
     lloq = lloq,
     censoring = censoring
   )
-  attr(result, "similarity_score") <- attr(sampled_covs, "similarity_score")
+  attr(result, "similarity_score") <- selected$score
   result
+}
+
+#' Draw, simulate and score candidates, returning the best anonymized dataset
+#'
+#' Orchestrates candidate selection for [anonymize_dataset()]. With
+#' `n_candidates == 1` a single candidate is sampled and simulated. With
+#' `score_on == "covariate"` the closest covariate sample is chosen first and the
+#' PK model is simulated once. With `score_on == "concentration"` every candidate
+#' is sampled *and* simulated, and the one whose simulated concentration-time
+#' data is closest to the observed concentrations is kept. Returns a list with
+#' the selected anonymized data (concentrations filled in) and its score.
+#'
+#' @noRd
+select_best_candidate <- function(
+  data,
+  sample_data,
+  covariates,
+  cat_covs,
+  dictionary,
+  model_file,
+  id_var,
+  time_var,
+  n_subjects,
+  n_candidates,
+  similarity,
+  score_on,
+  seed,
+  ...
+) {
+  draw_candidate <- function(candidate_seed) {
+    sample_covariates_mice_timevarying(
+      data = sample_data,
+      id_var = id_var,
+      time_var = time_var,
+      time_varying_covs = covariates,
+      cat_covs = cat_covs,
+      design_match = "propensity",
+      design_match_covs = covariates,
+      design_id_var = ".design_id",
+      n_subjects = n_subjects,
+      seed = candidate_seed,
+      ...
+    )
+  }
+  simulate_candidate <- function(sampled, candidate_seed) {
+    anonymized <- build_anonymized_simulation_input(
+      data = data, sampled_covs = sampled,
+      covariates = covariates, dictionary = dictionary
+    )
+    sim <- simulate_anonymized_concentrations(
+      model_file = model_file, data = anonymized, seed = candidate_seed
+    )
+    apply_simulated_concentrations(data = anonymized, sim = sim)
+  }
+
+  if (n_candidates == 1) {
+    return(list(data = simulate_candidate(draw_candidate(seed), seed), score = NULL))
+  }
+
+  if (score_on == "covariate") {
+    sampled <- select_best_covariate_sample(
+      sample_data = sample_data, observed = data, covariates = covariates,
+      cat_covs = cat_covs, id_var = id_var, time_var = time_var,
+      n_subjects = n_subjects, n_candidates = n_candidates,
+      similarity = similarity, seed = seed, ...
+    )
+    return(list(
+      data = simulate_candidate(sampled, seed),
+      score = attr(sampled, "similarity_score")
+    ))
+  }
+
+  # score_on == "concentration": simulate every candidate and compare the
+  # simulated concentration-time cloud to the observed concentrations.
+  observed_cloud <- build_concentration_cloud(
+    data = data, evid_var = dictionary$EVID,
+    time_var = time_var, dv_var = dictionary$DV
+  )
+  best <- NULL
+  best_score <- Inf
+  for (i in seq_len(n_candidates)) {
+    candidate_seed <- if (is.null(seed)) NULL else as.integer(seed + i - 1L)
+    anonymized <- simulate_candidate(draw_candidate(candidate_seed), candidate_seed)
+    score <- score_concentration_similarity(observed_cloud, anonymized, similarity)
+    if (score < best_score) {
+      best_score <- score
+      best <- anonymized
+    }
+  }
+  list(data = best, score = best_score)
+}
+
+#' Build a (time, log-concentration) observation point cloud
+#'
+#' Extracts the observation rows (`EVID == 0`) with a positive concentration and
+#' returns a two-column matrix of time and log concentration, used to score the
+#' similarity of simulated concentrations to the observed data.
+#'
+#' @noRd
+build_concentration_cloud <- function(data, evid_var, time_var, dv_var) {
+  evid <- data[[evid_var]]
+  obs <- data[!is.na(evid) & evid == 0, , drop = FALSE]
+  dv <- obs[[dv_var]]
+  tm <- obs[[time_var]]
+  keep <- is.finite(dv) & dv > 0 & is.finite(tm)
+  cbind(TIME = tm[keep], LOGDV = log(dv[keep]))
+}
+
+#' Energy distance between observed and simulated concentration clouds
+#'
+#' Builds the candidate's `(time, log concentration)` cloud (using the standard
+#' `EVID`/`TIME`/`DV` columns produced by the simulation step), standardizes both
+#' clouds by the observed spread, and returns the requested distance.
+#'
+#' @noRd
+score_concentration_similarity <- function(observed_cloud, candidate, similarity) {
+  candidate_cloud <- build_concentration_cloud(
+    data = candidate, evid_var = "EVID", time_var = "TIME", dv_var = "DV"
+  )
+  if (nrow(candidate_cloud) == 0 || nrow(observed_cloud) == 0) {
+    return(Inf)
+  }
+  sds <- apply(observed_cloud, 2, stats::sd)
+  sds[!is.finite(sds) | sds == 0] <- 1
+  observed <- sweep(observed_cloud, 2, sds, "/")
+  candidate_std <- sweep(candidate_cloud, 2, sds, "/")
+  switch(
+    similarity,
+    energy = energy_distance(observed, candidate_std)
+  )
 }
 
 #' Draw and score `n_candidates` covariate samples, returning the closest match

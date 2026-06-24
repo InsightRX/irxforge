@@ -15,6 +15,7 @@ anonymize_dataset(
   sigdig = 4,
   n_candidates = 1,
   similarity = c("energy"),
+  score_on = c("concentration", "covariate"),
   seed = NULL,
   ...
 )
@@ -42,22 +43,28 @@ and simulated concentrations (\code{DV}) to, via \code{\link[=signif]{signif()}}
 the values. Default \code{4}. \code{NULL} disables rounding. Rounding is applied
 before the \code{lloq} comparison.}
 
-\item{n_candidates}{number of independent covariate samples to draw and score
-against the observed covariate data, keeping the closest match. Default \code{1}
-(no scoring; a single sample is used). When greater than 1, the covariates
-are resampled \code{n_candidates} times and the candidate with the smallest
-distance to the observed covariate distribution is selected before the (one)
-PK simulation is run. The chosen candidate's score is attached to the result
-as the \code{"similarity_score"} attribute.}
+\item{n_candidates}{number of independent candidates to draw and score against
+the observed data, keeping the closest match. Default \code{1} (no scoring; a
+single candidate is used). When greater than 1, the candidate with the
+smallest distance to the observed data (see \code{score_on}) is selected. The
+chosen candidate's score is attached to the result as the
+\code{"similarity_score"} attribute.}
 
 \item{similarity}{distribution-similarity metric used to score candidates.
 \code{"energy"} (default) is the energy distance between the observed and
-simulated per-subject covariate-trajectory feature matrices (baseline, mean,
-slope and within-subject SD of each continuous covariate, and the
-per-subject time fraction in each level of categorical covariates),
-standardized by the observed spread. Lower is closer. The score is
-population-level, not per-subject, so it does not push individual simulated
-subjects toward specific real subjects.}
+simulated feature matrices, standardized by the observed spread. Lower is
+closer. The score is population-level, not per-subject, so it does not push
+individual simulated subjects toward specific real subjects.}
+
+\item{score_on}{what to score candidates on when \code{n_candidates > 1}.
+\code{"concentration"} (default) scores the simulated concentration-time data:
+each candidate is fully simulated and its \verb{(time, log concentration)}
+observation cloud is compared to the observed concentrations, so the PK
+simulation is run once per candidate. \code{"covariate"} scores only the sampled
+covariate trajectories (baseline, mean, slope and within-subject SD per
+continuous covariate; per-subject time fraction in each level per
+categorical covariate), which is cheaper because the PK simulation is then
+run only once, on the selected covariate sample.}
 
 \item{seed}{optional integer seed used for covariate sampling and FeRx
 simulation. \code{NULL} (default) does not seed, so each call draws
