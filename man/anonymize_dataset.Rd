@@ -13,6 +13,8 @@ anonymize_dataset(
   lloq = NULL,
   censoring = c("drop", "cens"),
   sigdig = 4,
+  n_candidates = 1,
+  similarity = c("energy"),
   seed = NULL,
   ...
 )
@@ -39,6 +41,23 @@ column, with \code{1} for below-LLOQ observations and \code{0} otherwise.}
 and simulated concentrations (\code{DV}) to, via \code{\link[=signif]{signif()}}, to further obscure
 the values. Default \code{4}. \code{NULL} disables rounding. Rounding is applied
 before the \code{lloq} comparison.}
+
+\item{n_candidates}{number of independent covariate samples to draw and score
+against the observed covariate data, keeping the closest match. Default \code{1}
+(no scoring; a single sample is used). When greater than 1, the covariates
+are resampled \code{n_candidates} times and the candidate with the smallest
+distance to the observed covariate distribution is selected before the (one)
+PK simulation is run. The chosen candidate's score is attached to the result
+as the \code{"similarity_score"} attribute.}
+
+\item{similarity}{distribution-similarity metric used to score candidates.
+\code{"energy"} (default) is the energy distance between the observed and
+simulated per-subject covariate-trajectory feature matrices (baseline, mean,
+slope and within-subject SD of each continuous covariate, and the
+per-subject time fraction in each level of categorical covariates),
+standardized by the observed spread. Lower is closer. The score is
+population-level, not per-subject, so it does not push individual simulated
+subjects toward specific real subjects.}
 
 \item{seed}{optional integer seed used for covariate sampling and FeRx
 simulation. \code{NULL} (default) does not seed, so each call draws

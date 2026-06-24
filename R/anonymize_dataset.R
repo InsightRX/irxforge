@@ -19,6 +19,21 @@
 #'   and simulated concentrations (`DV`) to, via [signif()], to further obscure
 #'   the values. Default `4`. `NULL` disables rounding. Rounding is applied
 #'   before the `lloq` comparison.
+#' @param n_candidates number of independent covariate samples to draw and score
+#'   against the observed covariate data, keeping the closest match. Default `1`
+#'   (no scoring; a single sample is used). When greater than 1, the covariates
+#'   are resampled `n_candidates` times and the candidate with the smallest
+#'   distance to the observed covariate distribution is selected before the (one)
+#'   PK simulation is run. The chosen candidate's score is attached to the result
+#'   as the `"similarity_score"` attribute.
+#' @param similarity distribution-similarity metric used to score candidates.
+#'   `"energy"` (default) is the energy distance between the observed and
+#'   simulated per-subject covariate-trajectory feature matrices (baseline, mean,
+#'   slope and within-subject SD of each continuous covariate, and the
+#'   per-subject time fraction in each level of categorical covariates),
+#'   standardized by the observed spread. Lower is closer. The score is
+#'   population-level, not per-subject, so it does not push individual simulated
+#'   subjects toward specific real subjects.
 #' @param seed optional integer seed used for covariate sampling and FeRx
 #'   simulation. `NULL` (default) does not seed, so each call draws
 #'   independently.
@@ -43,14 +58,21 @@ anonymize_dataset <- function(
   lloq = NULL,
   censoring = c("drop", "cens"),
   sigdig = 4,
+  n_candidates = 1,
+  similarity = c("energy"),
   seed = NULL,
   ...
 ) {
   censoring <- match.arg(censoring)
+  similarity <- match.arg(similarity)
   if (!is.null(sigdig) &&
       (!is.numeric(sigdig) || length(sigdig) != 1 || is.na(sigdig) ||
        sigdig < 1 || sigdig != round(sigdig))) {
     stop("`sigdig` must be a single positive integer or NULL.", call. = FALSE)
+  }
+  if (length(n_candidates) != 1 || !is.numeric(n_candidates) ||
+      is.na(n_candidates) || n_candidates < 1 || n_candidates != round(n_candidates)) {
+    stop("`n_candidates` must be a single positive integer.", call. = FALSE)
   }
   data <- as.data.frame(data)
   dictionary <- normalize_anonymize_dictionary(dictionary)
@@ -72,16 +94,16 @@ anonymize_dataset <- function(
     }, logical(1))
   ]
 
-  sampled_covs <- sample_covariates_mice_timevarying(
-    data = sample_data,
+  sampled_covs <- select_best_covariate_sample(
+    sample_data = sample_data,
+    observed = data,
+    covariates = covariates,
+    cat_covs = cat_covs,
     id_var = id_var,
     time_var = time_var,
-    time_varying_covs = covariates,
-    cat_covs = cat_covs,
-    design_match = "propensity",
-    design_match_covs = covariates,
-    design_id_var = ".design_id",
     n_subjects = length(unique(data[[id_var]])),
+    n_candidates = n_candidates,
+    similarity = similarity,
     seed = seed,
     ...
   )
@@ -107,11 +129,193 @@ anonymize_dataset <- function(
     covariates = covariates,
     sigdig = sigdig
   )
-  apply_anonymize_lloq(
+  result <- apply_anonymize_lloq(
     data = anonymized,
     lloq = lloq,
     censoring = censoring
   )
+  attr(result, "similarity_score") <- attr(sampled_covs, "similarity_score")
+  result
+}
+
+#' Draw and score `n_candidates` covariate samples, returning the closest match
+#'
+#' Samples the time-varying covariates `n_candidates` times (with derived,
+#' reproducible seeds), scores each candidate against the observed covariate data
+#' with the requested population-level distance, and returns the candidate with
+#' the smallest distance. With `n_candidates == 1` a single sample is returned
+#' unchanged, preserving the historical behaviour.
+#'
+#' @noRd
+select_best_covariate_sample <- function(
+  sample_data,
+  observed,
+  covariates,
+  cat_covs,
+  id_var,
+  time_var,
+  n_subjects,
+  n_candidates,
+  similarity,
+  seed,
+  ...
+) {
+  draw_candidate <- function(candidate_seed) {
+    sample_covariates_mice_timevarying(
+      data = sample_data,
+      id_var = id_var,
+      time_var = time_var,
+      time_varying_covs = covariates,
+      cat_covs = cat_covs,
+      design_match = "propensity",
+      design_match_covs = covariates,
+      design_id_var = ".design_id",
+      n_subjects = n_subjects,
+      seed = candidate_seed,
+      ...
+    )
+  }
+
+  if (n_candidates == 1) {
+    return(draw_candidate(seed))
+  }
+
+  cat_levels <- lapply(cat_covs, function(cov) {
+    sort(unique(as.character(observed[[cov]])))
+  })
+  names(cat_levels) <- cat_covs
+  observed_feats <- build_covariate_features(
+    data = observed, id_var = id_var, time_var = time_var,
+    covariates = covariates, cat_covs = cat_covs, cat_levels = cat_levels
+  )
+
+  best <- NULL
+  best_score <- Inf
+  for (i in seq_len(n_candidates)) {
+    candidate_seed <- if (is.null(seed)) NULL else as.integer(seed + i - 1L)
+    candidate <- draw_candidate(candidate_seed)
+    candidate_feats <- build_covariate_features(
+      data = candidate, id_var = id_var, time_var = time_var,
+      covariates = covariates, cat_covs = cat_covs, cat_levels = cat_levels
+    )
+    score <- score_covariate_similarity(
+      observed_feats = observed_feats,
+      candidate_feats = candidate_feats,
+      similarity = similarity
+    )
+    if (score < best_score) {
+      best_score <- score
+      best <- candidate
+    }
+  }
+  attr(best, "similarity_score") <- best_score
+  best
+}
+
+#' Build a per-subject covariate-trajectory feature matrix
+#'
+#' For each subject, summarises every continuous covariate by its baseline value,
+#' mean, ordinary-least-squares slope over time and within-subject SD, and every
+#' categorical covariate by the fraction of the subject's records spent in each
+#' observed level. Returns a data.frame with one row per subject.
+#'
+#' @noRd
+build_covariate_features <- function(
+  data,
+  id_var,
+  time_var,
+  covariates,
+  cat_covs,
+  cat_levels
+) {
+  cont_covs <- setdiff(covariates, cat_covs)
+  profiles <- split(data, data[[id_var]])
+  rows <- lapply(profiles, function(profile) {
+    profile <- profile[order(profile[[time_var]]), , drop = FALSE]
+    times <- profile[[time_var]]
+    feat <- list()
+    for (cov in cont_covs) {
+      x <- profile[[cov]]
+      non_na <- !is.na(x)
+      feat[[paste0(cov, "_base")]] <- x[[1]]
+      feat[[paste0(cov, "_mean")]] <- mean(x, na.rm = TRUE)
+      feat[[paste0(cov, "_slope")]] <- trajectory_slope(times, x)
+      feat[[paste0(cov, "_sd")]] <- if (sum(non_na) > 1) stats::sd(x, na.rm = TRUE) else 0
+    }
+    for (cov in cat_covs) {
+      values <- as.character(profile[[cov]])
+      for (lvl in cat_levels[[cov]]) {
+        feat[[paste0(cov, "_", lvl)]] <- mean(values == lvl, na.rm = TRUE)
+      }
+    }
+    as.data.frame(feat, check.names = FALSE)
+  })
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  out
+}
+
+#' Ordinary-least-squares slope of `x` against `t`, robust to sparse data
+#'
+#' @noRd
+trajectory_slope <- function(t, x) {
+  ok <- !is.na(t) & !is.na(x)
+  if (sum(ok) < 2 || length(unique(t[ok])) < 2) {
+    return(0)
+  }
+  unname(stats::coef(stats::lm(x[ok] ~ t[ok]))[[2]])
+}
+
+#' Population-level distance between observed and candidate feature matrices
+#'
+#' Standardises both matrices by the observed per-feature spread (dropping
+#' zero-variance features) and returns the requested distribution distance.
+#'
+#' @noRd
+score_covariate_similarity <- function(observed_feats, candidate_feats, similarity) {
+  shared <- intersect(names(observed_feats), names(candidate_feats))
+  observed_feats <- observed_feats[, shared, drop = FALSE]
+  candidate_feats <- candidate_feats[, shared, drop = FALSE]
+  sds <- vapply(observed_feats, stats::sd, numeric(1), na.rm = TRUE)
+  # Drop (near-)constant features with a relative threshold: a feature whose
+  # between-subject SD is only floating-point noise would otherwise be divided to
+  # ~1e15 and wreck the energy distance through catastrophic cancellation.
+  scale <- pmax(abs(vapply(observed_feats, mean, numeric(1), na.rm = TRUE)), 1)
+  keep <- shared[is.finite(sds) & sds > 1e-8 * scale]
+  if (length(keep) == 0) {
+    return(0)
+  }
+  observed <- sweep(as.matrix(observed_feats[, keep, drop = FALSE]), 2, sds[keep], "/")
+  candidate <- sweep(as.matrix(candidate_feats[, keep, drop = FALSE]), 2, sds[keep], "/")
+  observed[!is.finite(observed)] <- 0
+  candidate[!is.finite(candidate)] <- 0
+  switch(
+    similarity,
+    energy = energy_distance(observed, candidate)
+  )
+}
+
+#' Energy distance between two standardized feature matrices
+#'
+#' `E = 2 * mean||o_i - s_j|| - mean||o_i - o_j|| - mean||s_i - s_j||`. Lower
+#' values indicate more similar multivariate distributions.
+#'
+#' @noRd
+energy_distance <- function(observed, simulated) {
+  cross <- mean(cross_distances(observed, simulated))
+  within_o <- mean(as.matrix(stats::dist(observed)))
+  within_s <- mean(as.matrix(stats::dist(simulated)))
+  2 * cross - within_o - within_s
+}
+
+#' Pairwise Euclidean distances between the rows of two matrices
+#'
+#' @noRd
+cross_distances <- function(a, b) {
+  a2 <- rowSums(a^2)
+  b2 <- rowSums(b^2)
+  d2 <- outer(a2, b2, "+") - 2 * a %*% t(b)
+  sqrt(pmax(d2, 0))
 }
 
 #' Round sampled covariates and simulated concentrations to `sigdig` figures

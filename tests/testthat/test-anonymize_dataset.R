@@ -66,6 +66,60 @@ test_that("anonymize_dataset creates anonymized NONMEM-style data", {
   expect_equal(out$WT, c(75, 76, 76, 65, 65, 66))
 })
 
+test_that("n_candidates selects the covariate sample closest to observed data", {
+  dat <- data.frame(
+    SUBJ = c("A", "A", "A", "B", "B", "B"),
+    TAD = c(0, 1, 2, 0, 1, 2),
+    EVENT = c(1, 0, 0, 1, 0, 0),
+    DOSE = c(100, 0, 0, 200, 0, 0),
+    CONC = c(0, 4, 3, 0, 8, 6),
+    WT = c(70, 70, 71, 80, 80, 81),
+    SCR = c(1.0, 1.1, 1.1, 0.8, 0.8, 0.9)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  far <- data.frame(
+    SUBJ = c(1, 1, 1, 2, 2, 2),
+    .design_id = c("A", "A", "A", "B", "B", "B"),
+    TAD = c(0, 1, 2, 0, 1, 2),
+    WT = rep(120, 6),
+    SCR = rep(3, 6)
+  )
+  near <- data.frame(
+    SUBJ = c(1, 1, 1, 2, 2, 2),
+    .design_id = c("A", "A", "A", "B", "B", "B"),
+    TAD = c(0, 1, 2, 0, 1, 2),
+    WT = c(70, 70, 71, 80, 80, 81), # identical to observed
+    SCR = c(1.0, 1.1, 1.1, 0.8, 0.8, 0.9)
+  )
+  call_idx <- 0
+
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) {
+      call_idx <<- call_idx + 1
+      if (call_idx == 1) far else near
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      data.frame(ID = c(1, 1, 2, 2), TIME = c(1, 2, 1, 2), DV_SIM = c(7, 8, 3, 4))
+    }
+  )
+
+  out <- anonymize_dataset(
+    data = dat,
+    covariates = c("WT", "SCR"),
+    model_file = model,
+    dictionary = list(ID = "SUBJ", TIME = "TAD", EVID = "EVENT",
+                      AMT = "DOSE", DV = "CONC"),
+    n_candidates = 2,
+    seed = 1
+  )
+
+  expect_equal(call_idx, 2) # both candidates were drawn
+  expect_equal(out$WT, c(70, 70, 71, 80, 80, 81)) # the near candidate was picked
+  expect_equal(attr(out, "similarity_score"), 0, tolerance = 1e-8)
+})
+
 test_that("sigdig rounds covariates and simulated concentrations", {
   dat <- data.frame(
     SUBJ = c("A", "A", "B", "B"),
