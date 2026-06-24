@@ -66,6 +66,61 @@ test_that("anonymize_dataset creates anonymized NONMEM-style data", {
   expect_equal(out$WT, c(75, 76, 76, 65, 65, 66))
 })
 
+test_that("sigdig rounds covariates and simulated concentrations", {
+  dat <- data.frame(
+    SUBJ = c("A", "A", "B", "B"),
+    TAD = c(0, 1, 0, 1),
+    EVENT = c(1, 0, 1, 0),
+    DOSE = c(100, 0, 200, 0),
+    CONC = c(0, 4, 0, 8),
+    WT = c(70, 70, 80, 80),
+    SCR = c(1.0, 1.1, 0.8, 0.9)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  mock_bindings <- list(
+    sample_covariates_mice_timevarying = function(data, id_var, time_var,
+                                                  time_varying_covs, design_match,
+                                                  design_id_var, n_subjects, ...) {
+      data.frame(
+        SUBJ = c(1, 1, 2, 2),
+        .design_id = c("A", "A", "B", "B"),
+        TAD = c(0, 1, 0, 1),
+        WT = c(70.123456, 70.123456, 80.987654, 80.987654),
+        SCR = c(1.0123456, 1.0123456, 0.87654321, 0.87654321)
+      )
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      data.frame(ID = c(1, 2), TIME = c(1, 1), DV_SIM = c(4.7654321, 8.1234567))
+    }
+  )
+
+  args <- list(
+    data = dat, covariates = c("WT", "SCR"), model_file = model,
+    dictionary = list(ID = "SUBJ", TIME = "TAD", EVID = "EVENT",
+                      AMT = "DOSE", DV = "CONC")
+  )
+
+  with_mocked_bindings(
+    {
+      rounded <- do.call(anonymize_dataset, c(args, sigdig = 4))
+      expect_equal(rounded$WT, signif(c(70.123456, 70.123456, 80.987654, 80.987654), 4))
+      expect_equal(rounded$SCR, signif(c(1.0123456, 1.0123456, 0.87654321, 0.87654321), 4))
+      expect_equal(rounded$DV[rounded$EVID == 0], signif(c(4.7654321, 8.1234567), 4))
+
+      unrounded <- do.call(anonymize_dataset, c(args, list(sigdig = NULL)))
+      expect_equal(unrounded$WT[1], 70.123456)
+      expect_equal(unrounded$DV[unrounded$EVID == 0][1], 4.7654321)
+
+      expect_error(do.call(anonymize_dataset, c(args, sigdig = 0)), "positive integer")
+    },
+    .package = "irxforge",
+    sample_covariates_mice_timevarying = mock_bindings$sample_covariates_mice_timevarying,
+    simulate_anonymized_concentrations = mock_bindings$simulate_anonymized_concentrations
+  )
+})
+
 test_that("anonymize_dataset drops below-LLOQ observations", {
   dat <- data.frame(
     ID = c(1, 1, 1),

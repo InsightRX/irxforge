@@ -12,6 +12,7 @@ anonymize_dataset(
     = "RATE"),
   lloq = NULL,
   censoring = c("drop", "cens"),
+  sigdig = 4,
   seed = NULL,
   ...
 )
@@ -33,6 +34,11 @@ optionally \code{RATE}. Defaults use the same names.}
 \item{censoring}{how to handle simulated observations below \code{lloq}.
 \code{"drop"} removes below-LLOQ observation rows. \code{"cens"} adds a \code{CENS}
 column, with \code{1} for below-LLOQ observations and \code{0} otherwise.}
+
+\item{sigdig}{number of significant digits to round the sampled covariates
+and simulated concentrations (\code{DV}) to, via \code{\link[=signif]{signif()}}, to further obscure
+the values. Default \code{4}. \code{NULL} disables rounding. Rounding is applied
+before the \code{lloq} comparison.}
 
 \item{seed}{optional integer seed used for covariate sampling and FeRx
 simulation. \code{NULL} (default) does not seed, so each call draws

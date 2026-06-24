@@ -15,6 +15,10 @@
 #' @param censoring how to handle simulated observations below `lloq`.
 #'   `"drop"` removes below-LLOQ observation rows. `"cens"` adds a `CENS`
 #'   column, with `1` for below-LLOQ observations and `0` otherwise.
+#' @param sigdig number of significant digits to round the sampled covariates
+#'   and simulated concentrations (`DV`) to, via [signif()], to further obscure
+#'   the values. Default `4`. `NULL` disables rounding. Rounding is applied
+#'   before the `lloq` comparison.
 #' @param seed optional integer seed used for covariate sampling and FeRx
 #'   simulation. `NULL` (default) does not seed, so each call draws
 #'   independently.
@@ -38,10 +42,16 @@ anonymize_dataset <- function(
   ),
   lloq = NULL,
   censoring = c("drop", "cens"),
+  sigdig = 4,
   seed = NULL,
   ...
 ) {
   censoring <- match.arg(censoring)
+  if (!is.null(sigdig) &&
+      (!is.numeric(sigdig) || length(sigdig) != 1 || is.na(sigdig) ||
+       sigdig < 1 || sigdig != round(sigdig))) {
+    stop("`sigdig` must be a single positive integer or NULL.", call. = FALSE)
+  }
   data <- as.data.frame(data)
   dictionary <- normalize_anonymize_dictionary(dictionary)
   validate_anonymize_inputs(
@@ -92,11 +102,36 @@ anonymize_dataset <- function(
     data = anonymized,
     sim = sim
   )
+  anonymized <- apply_anonymize_sigdig(
+    data = anonymized,
+    covariates = covariates,
+    sigdig = sigdig
+  )
   apply_anonymize_lloq(
     data = anonymized,
     lloq = lloq,
     censoring = censoring
   )
+}
+
+#' Round sampled covariates and simulated concentrations to `sigdig` figures
+#'
+#' Applies [signif()] to the numeric covariate columns and the `DV` column to
+#' obscure the exact simulated values. Categorical/non-numeric covariates are
+#' left untouched. `sigdig = NULL` returns `data` unchanged.
+#'
+#' @noRd
+apply_anonymize_sigdig <- function(data, covariates, sigdig) {
+  if (is.null(sigdig)) {
+    return(data)
+  }
+  cols <- intersect(c(covariates, "DV"), names(data))
+  for (col in cols) {
+    if (is.numeric(data[[col]])) {
+      data[[col]] <- signif(data[[col]], sigdig)
+    }
+  }
+  data
 }
 
 normalize_anonymize_dictionary <- function(dictionary) {
