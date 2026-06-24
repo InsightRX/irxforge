@@ -50,6 +50,9 @@
 #' @param truncate logical; if `TRUE` (default) reconstructed time-varying
 #'   covariate values are clamped to the observed `[min, max]` range of each
 #'   covariate, preventing nonphysical extrapolated values.
+#' @param design_id_var optional column name for retaining the observed subject
+#'   ID whose observation-time design was cloned for each simulated subject.
+#'   Only usable when `time_grid = NULL`. Default `NULL` omits this column.
 #' @param n_subjects number of simulated subjects. Default is the number of
 #'   unique observed subjects.
 #' @param replicates number of independent simulated datasets to sample.
@@ -102,6 +105,7 @@ sample_covariates_copulas_timevarying <- function(
   bw_mult = 1,
   noise = NULL,
   truncate = TRUE,
+  design_id_var = NULL,
   n_subjects = length(unique(data[[id_var]])),
   replicates = 1,
   seed = NULL,
@@ -147,6 +151,12 @@ sample_covariates_copulas_timevarying <- function(
       stop("`time_grid` must contain at least one timepoint.", call. = FALSE)
     }
   }
+  if (!is.null(time_grid) && !is.null(design_id_var)) {
+    stop(
+      "`design_id_var` can only be used when `time_grid = NULL`.",
+      call. = FALSE
+    )
+  }
 
   if (is.null(static_covs)) static_covs <- character()
   if (is.null(time_varying_covs)) {
@@ -178,6 +188,12 @@ sample_covariates_copulas_timevarying <- function(
       "Only continuous covariates are supported; these are not numeric: ",
       paste(non_numeric, collapse = ", "),
       ". Use `sample_covariates_mice_timevarying()` for categorical covariates.",
+      call. = FALSE
+    )
+  }
+  if (!is.null(design_id_var) && design_id_var %in% c(id_var, time_var, covs)) {
+    stop(
+      "`design_id_var` must not match `id_var`, `time_var`, or a covariate name.",
       call. = FALSE
     )
   }
@@ -228,12 +244,20 @@ sample_covariates_copulas_timevarying <- function(
       n_subjects = n_subjects
     )
 
+    design_assignment <- if (is.null(time_grid)) {
+      rep(seq_along(observed_times), length.out = n_subjects)
+    } else {
+      NULL
+    }
     subject_times <- if (is.null(time_grid)) {
-      observed_times[
-        rep(seq_along(observed_times), length.out = n_subjects)
-      ]
+      observed_times[design_assignment]
     } else {
       rep(list(time_grid), n_subjects)
+    }
+    design_ids <- if (!is.null(design_id_var) && !is.null(design_assignment)) {
+      names(observed_times)[design_assignment]
+    } else {
+      NULL
     }
 
     out[[replicate_idx]] <- reconstruct_copula_trajectories(
@@ -245,6 +269,8 @@ sample_covariates_copulas_timevarying <- function(
       degree = degree,
       id_var = id_var,
       time_var = time_var,
+      design_id_var = design_id_var,
+      design_ids = design_ids,
       noise = noise,
       truncate = truncate,
       observed_ranges = observed_ranges
@@ -410,6 +436,8 @@ reconstruct_copula_trajectories <- function(
   degree,
   id_var,
   time_var,
+  design_id_var = NULL,
+  design_ids = NULL,
   noise,
   truncate,
   observed_ranges
@@ -422,6 +450,9 @@ reconstruct_copula_trajectories <- function(
     n_t <- length(times)
     block <- data.frame(.id = i, .time = times)
     names(block) <- c(id_var, time_var)
+    if (!is.null(design_id_var) && !is.null(design_ids)) {
+      block[[design_id_var]] <- as.character(design_ids[[i]])
+    }
 
     for (cov in static_covs) {
       value <- sampled[[cov]][[i]]

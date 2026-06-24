@@ -51,6 +51,9 @@
 #' @param design_match_covs character vector of baseline covariates to use for
 #'   propensity-score design matching. Default is all static and time-varying
 #'   covariates.
+#' @param design_id_var optional column name for retaining the observed subject
+#'   ID whose observation-time design was assigned to each simulated subject.
+#'   Only usable when `time_grid = NULL`. Default `NULL` omits this column.
 #' @param n_subjects number of simulated subjects. Default is the number of
 #'   unique observed subjects.
 #' @param baseline_method how baseline covariates are sampled. `"mice"`
@@ -113,6 +116,7 @@ sample_covariates_lme_timevarying <- function(
   measurement_pattern = c("change", "nonmissing", "all"),
   design_match = c("clone", "propensity"),
   design_match_covs = NULL,
+  design_id_var = NULL,
   n_subjects = length(unique(data[[id_var]])),
   baseline_method = c("mice", "bootstrap"),
   noise = NULL,
@@ -143,6 +147,12 @@ sample_covariates_lme_timevarying <- function(
   if (!is.null(time_grid) && design_match == "propensity") {
     stop(
       "`design_match = \"propensity\"` can only be used when `time_grid = NULL`.",
+      call. = FALSE
+    )
+  }
+  if (!is.null(time_grid) && !is.null(design_id_var)) {
+    stop(
+      "`design_id_var` can only be used when `time_grid = NULL`.",
       call. = FALSE
     )
   }
@@ -203,6 +213,12 @@ sample_covariates_lme_timevarying <- function(
   if (design_match == "propensity" && length(design_match_covs) == 0) {
     stop(
       "`design_match_covs` must contain at least one covariate for propensity matching.",
+      call. = FALSE
+    )
+  }
+  if (!is.null(design_id_var) && design_id_var %in% c(id_var, time_var, covs)) {
+    stop(
+      "`design_id_var` must not match `id_var`, `time_var`, or a covariate name.",
       call. = FALSE
     )
   }
@@ -307,12 +323,23 @@ sample_covariates_lme_timevarying <- function(
 
     current <- baseline
     current[[id_var]] <- seq_len(n_subjects)
+    if (!is.null(design_id_var)) {
+      current[[design_id_var]] <- as.character(vapply(
+        subject_profiles,
+        function(x) x$id,
+        character(1)
+      ))
+    }
     current[[time_var]] <- vapply(
       subject_profiles,
       function(x) x$time[[1]],
       numeric(1)
     )
-    current <- current[, c(id_var, time_var, covs), drop = FALSE]
+    current <- current[
+      ,
+      c(id_var, if (!is.null(design_id_var)) design_id_var, time_var, covs),
+      drop = FALSE
+    ]
 
     profile_lengths <- vapply(subject_profiles, function(x) length(x$time), integer(1))
     replicate_rows <- vector("list", max(profile_lengths))

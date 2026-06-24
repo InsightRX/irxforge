@@ -17,6 +17,7 @@ sample_covariates_lme_timevarying(
   measurement_pattern = c("change", "nonmissing", "all"),
   design_match = c("clone", "propensity"),
   design_match_covs = NULL,
+  design_id_var = NULL,
   n_subjects = length(unique(data[[id_var]])),
   baseline_method = c("mice", "bootstrap"),
   noise = NULL,
@@ -80,6 +81,10 @@ from the unmatched observed subject with the nearest propensity score.}
 \item{design_match_covs}{character vector of baseline covariates to use for
 propensity-score design matching. Default is all static and time-varying
 covariates.}
+
+\item{design_id_var}{optional column name for retaining the observed subject
+ID whose observation-time design was assigned to each simulated subject.
+Only usable when \code{time_grid = NULL}. Default \code{NULL} omits this column.}
 
 \item{n_subjects}{number of simulated subjects. Default is the number of
 unique observed subjects.}

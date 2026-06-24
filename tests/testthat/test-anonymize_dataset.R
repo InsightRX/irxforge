@@ -367,3 +367,58 @@ test_that("anonymize_dataset validates inputs", {
     "existing FeRx model"
   )
 })
+
+test_that("non-mice methods reject categorical covariates", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2),
+    TIME = c(0, 1, 0, 1),
+    EVID = c(1, 0, 1, 0),
+    AMT = c(100, 0, 200, 0),
+    DV = c(0, 5, 0, 8),
+    SEX = c("M", "M", "F", "F")
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  expect_error(
+    anonymize_dataset(dat, covariates = "SEX", model_file = model, method = "lme"),
+    "continuous"
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = "SEX", model_file = model, method = "copulas"),
+    "continuous"
+  )
+})
+
+test_that("method routes to the requested time-varying sampler", {
+  dat <- data.frame(
+    ID = c(1, 1, 1, 2, 2, 2),
+    TIME = c(0, 1, 2, 0, 1, 2),
+    EVID = c(1, 0, 0, 1, 0, 0),
+    AMT = c(100, 0, 0, 200, 0, 0),
+    DV = c(0, 5, 4, 0, 8, 6),
+    WT = c(70, 70, 71, 80, 80, 81)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  candidate <- data.frame(
+    ID = c(1, 1, 1, 2, 2, 2),
+    .design_id = c("1", "1", "1", "2", "2", "2"),
+    TIME = c(0, 1, 2, 0, 1, 2),
+    WT = c(72, 72, 73, 78, 78, 79)
+  )
+  called <- character()
+  local_mocked_bindings(
+    sample_covariates_lme_timevarying = function(...) {
+      called <<- c(called, "lme")
+      candidate
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      data.frame(ID = c(1, 1, 2, 2), TIME = c(1, 2, 1, 2), DV_SIM = c(5, 4, 8, 6))
+    }
+  )
+  out <- anonymize_dataset(
+    dat, covariates = "WT", model_file = model, method = "lme", seed = 1
+  )
+  expect_equal(called, "lme")
+  expect_equal(out$WT, c(72, 72, 73, 78, 78, 79))
+})

@@ -11,6 +11,12 @@
 #' @param dictionary named list mapping expected NONMEM column names to columns
 #'   in `data`. Supported keys are `ID`, `EVID`, `AMT`, `TIME`, `DV`, and
 #'   optionally `RATE`. Defaults use the same names.
+#' @param method time-varying covariate sampler used to resample the covariates.
+#'   `"mice"` (default) uses [sample_covariates_mice_timevarying()], `"lme"` uses
+#'   [sample_covariates_lme_timevarying()], and `"copulas"` uses
+#'   [sample_covariates_copulas_timevarying()]. Only `"mice"` supports
+#'   categorical covariates; `"lme"` and `"copulas"` require all covariates to be
+#'   continuous.
 #' @param loq optional numeric limit of quantification. Simulated observations
 #'   below `loq` are handled according to `blq_method`.
 #' @param blq_method how to handle simulated observations below `loq`.
@@ -62,6 +68,7 @@ anonymize_dataset <- function(
     DV = "DV",
     RATE = "RATE"
   ),
+  method = c("mice", "lme", "copulas"),
   loq = NULL,
   blq_method = c("remove", "cens"),
   sigdig = 4,
@@ -71,6 +78,7 @@ anonymize_dataset <- function(
   seed = NULL,
   ...
 ) {
+  method <- match.arg(method)
   blq_method <- match.arg(blq_method)
   similarity <- match.arg(similarity)
   score_on <- match.arg(score_on)
@@ -102,11 +110,20 @@ anonymize_dataset <- function(
       is.factor(x) || is.character(x)
     }, logical(1))
   ]
+  if (method != "mice" && length(cat_covs) > 0) {
+    stop(
+      "`method = \"", method, "\"` supports only continuous covariates, but these ",
+      "are categorical: ", paste(cat_covs, collapse = ", "),
+      ". Use `method = \"mice\"` for categorical covariates.",
+      call. = FALSE
+    )
+  }
 
   selected <- select_best_candidate(
     data = data,
     sample_data = sample_data,
     covariates = covariates,
+    method = method,
     cat_covs = cat_covs,
     dictionary = dictionary,
     model_file = model_file,
@@ -134,6 +151,40 @@ anonymize_dataset <- function(
   result
 }
 
+#' Draw one time-varying covariate candidate with the chosen sampler
+#'
+#' Dispatches to the MICE, LME or copula time-varying sampler, in all cases
+#' requesting propensity design-matching (where supported) and emitting the
+#' `.design_id` bookkeeping column that [build_anonymized_simulation_input()]
+#' uses to align each simulated subject with an observed dosing/observation
+#' design.
+#'
+#' @noRd
+draw_anonymize_candidate <- function(
+  method, sample_data, covariates, cat_covs, id_var, time_var, n_subjects, seed, ...
+) {
+  switch(
+    method,
+    mice = sample_covariates_mice_timevarying(
+      data = sample_data, id_var = id_var, time_var = time_var,
+      time_varying_covs = covariates, cat_covs = cat_covs,
+      design_match = "propensity", design_match_covs = covariates,
+      design_id_var = ".design_id", n_subjects = n_subjects, seed = seed, ...
+    ),
+    lme = sample_covariates_lme_timevarying(
+      data = sample_data, id_var = id_var, time_var = time_var,
+      time_varying_covs = covariates,
+      design_match = "propensity", design_match_covs = covariates,
+      design_id_var = ".design_id", n_subjects = n_subjects, seed = seed, ...
+    ),
+    copulas = sample_covariates_copulas_timevarying(
+      data = sample_data, id_var = id_var, time_var = time_var,
+      time_varying_covs = covariates,
+      design_id_var = ".design_id", n_subjects = n_subjects, seed = seed, ...
+    )
+  )
+}
+
 #' Draw, simulate and score candidates, returning the best anonymized dataset
 #'
 #' Orchestrates candidate selection for [anonymize_dataset()]. With
@@ -149,6 +200,7 @@ select_best_candidate <- function(
   data,
   sample_data,
   covariates,
+  method,
   cat_covs,
   dictionary,
   model_file,
@@ -162,18 +214,10 @@ select_best_candidate <- function(
   ...
 ) {
   draw_candidate <- function(candidate_seed) {
-    sample_covariates_mice_timevarying(
-      data = sample_data,
-      id_var = id_var,
-      time_var = time_var,
-      time_varying_covs = covariates,
-      cat_covs = cat_covs,
-      design_match = "propensity",
-      design_match_covs = covariates,
-      design_id_var = ".design_id",
-      n_subjects = n_subjects,
-      seed = candidate_seed,
-      ...
+    draw_anonymize_candidate(
+      method = method, sample_data = sample_data, covariates = covariates,
+      cat_covs = cat_covs, id_var = id_var, time_var = time_var,
+      n_subjects = n_subjects, seed = candidate_seed, ...
     )
   }
   simulate_candidate <- function(sampled, candidate_seed) {
@@ -194,7 +238,7 @@ select_best_candidate <- function(
   if (score_on == "covariate") {
     sampled <- select_best_covariate_sample(
       sample_data = sample_data, observed = data, covariates = covariates,
-      cat_covs = cat_covs, id_var = id_var, time_var = time_var,
+      method = method, cat_covs = cat_covs, id_var = id_var, time_var = time_var,
       n_subjects = n_subjects, n_candidates = n_candidates,
       similarity = similarity, seed = seed, ...
     )
@@ -277,6 +321,7 @@ select_best_covariate_sample <- function(
   sample_data,
   observed,
   covariates,
+  method,
   cat_covs,
   id_var,
   time_var,
@@ -287,18 +332,10 @@ select_best_covariate_sample <- function(
   ...
 ) {
   draw_candidate <- function(candidate_seed) {
-    sample_covariates_mice_timevarying(
-      data = sample_data,
-      id_var = id_var,
-      time_var = time_var,
-      time_varying_covs = covariates,
-      cat_covs = cat_covs,
-      design_match = "propensity",
-      design_match_covs = covariates,
-      design_id_var = ".design_id",
-      n_subjects = n_subjects,
-      seed = candidate_seed,
-      ...
+    draw_anonymize_candidate(
+      method = method, sample_data = sample_data, covariates = covariates,
+      cat_covs = cat_covs, id_var = id_var, time_var = time_var,
+      n_subjects = n_subjects, seed = candidate_seed, ...
     )
   }
 

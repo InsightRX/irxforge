@@ -140,3 +140,14 @@ test_that("dispatcher routes method = 'copulas_timevarying'", {
   )
   expect_named(out, c("ID", "TIME", "WEIGHT", "CREAT"))
 })
+
+test_that("design_id_var retains the cloned observed subject id", {
+  skip_if_not_installed("rvinecopulib")
+  dat <- make_copula_test_data(n_subjects = 8)
+  out <- sample_covariates_copulas_timevarying(
+    dat, time_varying_covs = c("WEIGHT", "CREAT"), n_subjects = 8,
+    design_id_var = ".design_id", seed = 1
+  )
+  expect_true(".design_id" %in% names(out))
+  expect_true(all(out$.design_id %in% as.character(dat$ID)))
+})

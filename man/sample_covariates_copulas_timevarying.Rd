@@ -17,6 +17,7 @@ sample_covariates_copulas_timevarying(
   bw_mult = 1,
   noise = NULL,
   truncate = TRUE,
+  design_id_var = NULL,
   n_subjects = length(unique(data[[id_var]])),
   replicates = 1,
   seed = NULL,
@@ -74,6 +75,10 @@ Applied before \code{truncate}.}
 \item{truncate}{logical; if \code{TRUE} (default) reconstructed time-varying
 covariate values are clamped to the observed \verb{[min, max]} range of each
 covariate, preventing nonphysical extrapolated values.}
+
+\item{design_id_var}{optional column name for retaining the observed subject
+ID whose observation-time design was cloned for each simulated subject.
+Only usable when \code{time_grid = NULL}. Default \code{NULL} omits this column.}
 
 \item{n_subjects}{number of simulated subjects. Default is the number of
 unique observed subjects.}

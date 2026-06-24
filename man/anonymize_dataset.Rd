@@ -10,6 +10,7 @@ anonymize_dataset(
   model_file,
   dictionary = list(ID = "ID", EVID = "EVID", AMT = "AMT", TIME = "TIME", DV = "DV", RATE
     = "RATE"),
+  method = c("mice", "lme", "copulas"),
   loq = NULL,
   blq_method = c("remove", "cens"),
   sigdig = 4,
@@ -31,6 +32,13 @@ anonymized dataset.}
 \item{dictionary}{named list mapping expected NONMEM column names to columns
 in \code{data}. Supported keys are \code{ID}, \code{EVID}, \code{AMT}, \code{TIME}, \code{DV}, and
 optionally \code{RATE}. Defaults use the same names.}
+
+\item{method}{time-varying covariate sampler used to resample the covariates.
+\code{"mice"} (default) uses \code{\link[=sample_covariates_mice_timevarying]{sample_covariates_mice_timevarying()}}, \code{"lme"} uses
+\code{\link[=sample_covariates_lme_timevarying]{sample_covariates_lme_timevarying()}}, and \code{"copulas"} uses
+\code{\link[=sample_covariates_copulas_timevarying]{sample_covariates_copulas_timevarying()}}. Only \code{"mice"} supports
+categorical covariates; \code{"lme"} and \code{"copulas"} require all covariates to be
+continuous.}
 
 \item{loq}{optional numeric limit of quantification. Simulated observations
 below \code{loq} are handled according to \code{blq_method}.}
