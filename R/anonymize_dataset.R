@@ -11,14 +11,16 @@
 #' @param dictionary named list mapping expected NONMEM column names to columns
 #'   in `data`. Supported keys are `ID`, `EVID`, `AMT`, `TIME`, `DV`, and
 #'   optionally `RATE`. Defaults use the same names.
-#' @param lloq optional lower limit of quantification.
-#' @param censoring how to handle simulated observations below `lloq`.
-#'   `"drop"` removes below-LLOQ observation rows. `"cens"` adds a `CENS`
-#'   column, with `1` for below-LLOQ observations and `0` otherwise.
+#' @param loq optional numeric limit of quantification. Simulated observations
+#'   below `loq` are handled according to `blq_method`.
+#' @param blq_method how to handle simulated observations below `loq`.
+#'   `"remove"` (default) removes the below-LOQ observation rows. `"cens"` keeps
+#'   them, sets their `DV` to `0`, and adds a `CENS` column with `1` for
+#'   below-LOQ observations and `0` otherwise.
 #' @param sigdig number of significant digits to round the sampled covariates
 #'   and simulated concentrations (`DV`) to, via [signif()], to further obscure
 #'   the values. Default `4`. `NULL` disables rounding. Rounding is applied
-#'   before the `lloq` comparison.
+#'   before the `loq` comparison.
 #' @param n_candidates number of independent candidates to draw and score against
 #'   the observed data, keeping the closest match. Default `1` (no scoring; a
 #'   single candidate is used). When greater than 1, the candidate with the
@@ -60,8 +62,8 @@ anonymize_dataset <- function(
     DV = "DV",
     RATE = "RATE"
   ),
-  lloq = NULL,
-  censoring = c("drop", "cens"),
+  loq = NULL,
+  blq_method = c("remove", "cens"),
   sigdig = 4,
   n_candidates = 1,
   similarity = c("energy"),
@@ -69,7 +71,7 @@ anonymize_dataset <- function(
   seed = NULL,
   ...
 ) {
-  censoring <- match.arg(censoring)
+  blq_method <- match.arg(blq_method)
   similarity <- match.arg(similarity)
   score_on <- match.arg(score_on)
   if (!is.null(sigdig) &&
@@ -88,7 +90,7 @@ anonymize_dataset <- function(
     covariates = covariates,
     model_file = model_file,
     dictionary = dictionary,
-    lloq = lloq
+    loq = loq
   )
 
   id_var <- dictionary$ID
@@ -123,10 +125,10 @@ anonymize_dataset <- function(
     covariates = covariates,
     sigdig = sigdig
   )
-  result <- apply_anonymize_lloq(
+  result <- apply_anonymize_blq(
     data = anonymized,
-    lloq = lloq,
-    censoring = censoring
+    loq = loq,
+    blq_method = blq_method
   )
   attr(result, "similarity_score") <- selected$score
   result
@@ -491,7 +493,7 @@ normalize_anonymize_dictionary <- function(dictionary) {
   utils::modifyList(defaults, dictionary)
 }
 
-validate_anonymize_inputs <- function(data, covariates, model_file, dictionary, lloq) {
+validate_anonymize_inputs <- function(data, covariates, model_file, dictionary, loq) {
   if (!is.data.frame(data)) {
     stop("`data` must be a data.frame or tibble.", call. = FALSE)
   }
@@ -527,8 +529,8 @@ validate_anonymize_inputs <- function(data, covariates, model_file, dictionary, 
       call. = FALSE
     )
   }
-  if (!is.null(lloq) && (!is.numeric(lloq) || length(lloq) != 1 || is.na(lloq))) {
-    stop("`lloq` must be a single numeric value.", call. = FALSE)
+  if (!is.null(loq) && (!is.numeric(loq) || length(loq) != 1 || is.na(loq))) {
+    stop("`loq` must be a single numeric value.", call. = FALSE)
   }
 }
 
@@ -657,19 +659,20 @@ apply_simulated_concentrations <- function(data, sim) {
   data
 }
 
-apply_anonymize_lloq <- function(data, lloq, censoring) {
-  if (is.null(lloq)) {
+apply_anonymize_blq <- function(data, loq, blq_method) {
+  if (is.null(loq)) {
     return(data)
   }
   obs <- data$EVID == 0
   # Guard against NA simulated concentrations: an NA `DV` would otherwise make
-  # `blq` contain NA, which inserts all-NA rows on the drop path and errors on
+  # `blq` contain NA, which inserts all-NA rows on the remove path and errors on
   # the cens path ("NAs are not allowed in subscripted assignments").
-  blq <- obs & !is.na(data$DV) & data$DV < lloq
-  if (censoring == "drop") {
+  blq <- obs & !is.na(data$DV) & data$DV < loq
+  if (blq_method == "remove") {
     return(data[!blq, , drop = FALSE])
   }
   data$CENS <- 0L
   data$CENS[blq] <- 1L
+  data$DV[blq] <- 0
   data
 }

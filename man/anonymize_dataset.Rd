@@ -10,8 +10,8 @@ anonymize_dataset(
   model_file,
   dictionary = list(ID = "ID", EVID = "EVID", AMT = "AMT", TIME = "TIME", DV = "DV", RATE
     = "RATE"),
-  lloq = NULL,
-  censoring = c("drop", "cens"),
+  loq = NULL,
+  blq_method = c("remove", "cens"),
   sigdig = 4,
   n_candidates = 1,
   similarity = c("energy"),
@@ -32,16 +32,18 @@ anonymized dataset.}
 in \code{data}. Supported keys are \code{ID}, \code{EVID}, \code{AMT}, \code{TIME}, \code{DV}, and
 optionally \code{RATE}. Defaults use the same names.}
 
-\item{lloq}{optional lower limit of quantification.}
+\item{loq}{optional numeric limit of quantification. Simulated observations
+below \code{loq} are handled according to \code{blq_method}.}
 
-\item{censoring}{how to handle simulated observations below \code{lloq}.
-\code{"drop"} removes below-LLOQ observation rows. \code{"cens"} adds a \code{CENS}
-column, with \code{1} for below-LLOQ observations and \code{0} otherwise.}
+\item{blq_method}{how to handle simulated observations below \code{loq}.
+\code{"remove"} (default) removes the below-LOQ observation rows. \code{"cens"} keeps
+them, sets their \code{DV} to \code{0}, and adds a \code{CENS} column with \code{1} for
+below-LOQ observations and \code{0} otherwise.}
 
 \item{sigdig}{number of significant digits to round the sampled covariates
 and simulated concentrations (\code{DV}) to, via \code{\link[=signif]{signif()}}, to further obscure
 the values. Default \code{4}. \code{NULL} disables rounding. Rounding is applied
-before the \code{lloq} comparison.}
+before the \code{loq} comparison.}
 
 \item{n_candidates}{number of independent candidates to draw and score against
 the observed data, keeping the closest match. Default \code{1} (no scoring; a

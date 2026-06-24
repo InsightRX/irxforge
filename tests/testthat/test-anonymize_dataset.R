@@ -247,8 +247,8 @@ test_that("anonymize_dataset drops below-LLOQ observations", {
     data = dat,
     covariates = "WT",
     model_file = model,
-    lloq = 1,
-    censoring = "drop"
+    loq = 1,
+    blq_method = "remove"
   )
 
   expect_equal(out$TIME, c(0, 2))
@@ -280,11 +280,11 @@ test_that("anonymize_dataset flags below-LLOQ observations", {
     data = dat,
     covariates = "WT",
     model_file = model,
-    lloq = 1,
-    censoring = "cens"
+    loq = 1,
+    blq_method = "cens"
   )
 
-  expect_equal(out$DV, c(0, 0.5, 2))
+  expect_equal(out$DV, c(0, 0, 2)) # below-LOQ value set to 0
   expect_equal(out$CENS, c(0, 1, 0))
 })
 
@@ -346,11 +346,11 @@ test_that("anonymize_dataset tolerates NA simulated concentrations", {
     }
   )
 
-  # NA DV must not crash the cens path nor inject all-NA rows on drop.
-  cens <- anonymize_dataset(dat, covariates = "WT", model_file = model, lloq = 1, censoring = "cens")
+  # NA DV must not crash the cens path nor inject all-NA rows on remove.
+  cens <- anonymize_dataset(dat, covariates = "WT", model_file = model, loq = 1, blq_method = "cens")
   expect_equal(cens$CENS, c(0, 0, 0))
-  drop <- anonymize_dataset(dat, covariates = "WT", model_file = model, lloq = 1, censoring = "drop")
-  expect_equal(nrow(drop), 3)
+  removed <- anonymize_dataset(dat, covariates = "WT", model_file = model, loq = 1, blq_method = "remove")
+  expect_equal(nrow(removed), 3)
 })
 
 test_that("anonymize_dataset validates inputs", {
