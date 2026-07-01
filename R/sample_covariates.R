@@ -8,8 +8,8 @@
 #' non-integer values may be sampled.
 #'
 #' @param method sampling method, one of `mvtnorm`, `bootstrap`, `mice`,
-#' `mice_timevarying`, `lme_timevarying`, or `nhanes`. E.g.
-#' `list(AGE = c(60, 80), WT = c(70, 100))`.
+#' `mice_timevarying`, `lme_timevarying`, `copulas`, `copulas_timevarying`, or
+#' `nhanes`. E.g. `list(AGE = c(60, 80), WT = c(70, 100))`.
 #' @param seed integer random seed passed to [set.seed()] for reproducibility.
 #' Default `NULL` does not set a seed.
 #' @param ... arguments passed to lower-level function(s).
@@ -19,8 +19,8 @@
 #' @export
 sample_covariates <- function(
   method = c(
-    "mvtnorm", "mice", "mice_timevarying", "lme_timevarying", "bootstrap",
-    "nhanes"
+    "mvtnorm", "mice", "mice_timevarying", "lme_timevarying",
+    "copulas", "copulas_timevarying", "bootstrap", "nhanes"
   ),
   seed = NULL,
   ...

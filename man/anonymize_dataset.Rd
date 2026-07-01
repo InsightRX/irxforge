@@ -10,8 +10,13 @@ anonymize_dataset(
   model_file,
   dictionary = list(ID = "ID", EVID = "EVID", AMT = "AMT", TIME = "TIME", DV = "DV", RATE
     = "RATE"),
-  lloq = NULL,
-  censoring = c("drop", "cens"),
+  method = c("mice", "lme", "copulas"),
+  loq = NULL,
+  blq_method = c("remove", "cens"),
+  sigdig = 4,
+  n_candidates = 1,
+  similarity = c("energy"),
+  score_on = c("concentration", "covariate"),
   seed = NULL,
   ...
 )
@@ -28,11 +33,48 @@ anonymized dataset.}
 in \code{data}. Supported keys are \code{ID}, \code{EVID}, \code{AMT}, \code{TIME}, \code{DV}, and
 optionally \code{RATE}. Defaults use the same names.}
 
-\item{lloq}{optional lower limit of quantification.}
+\item{method}{time-varying covariate sampler used to resample the covariates.
+\code{"mice"} (default) uses \code{\link[=sample_covariates_mice_timevarying]{sample_covariates_mice_timevarying()}}, \code{"lme"} uses
+\code{\link[=sample_covariates_lme_timevarying]{sample_covariates_lme_timevarying()}}, and \code{"copulas"} uses
+\code{\link[=sample_covariates_copulas_timevarying]{sample_covariates_copulas_timevarying()}}. Only \code{"mice"} supports
+categorical covariates; \code{"lme"} and \code{"copulas"} require all covariates to be
+continuous.}
 
-\item{censoring}{how to handle simulated observations below \code{lloq}.
-\code{"drop"} removes below-LLOQ observation rows. \code{"cens"} adds a \code{CENS}
-column, with \code{1} for below-LLOQ observations and \code{0} otherwise.}
+\item{loq}{optional numeric limit of quantification. Simulated observations
+below \code{loq} are handled according to \code{blq_method}.}
+
+\item{blq_method}{how to handle simulated observations below \code{loq}.
+\code{"remove"} (default) removes the below-LOQ observation rows. \code{"cens"} keeps
+them, sets their \code{DV} to \code{0}, and adds a \code{CENS} column with \code{1} for
+below-LOQ observations and \code{0} otherwise.}
+
+\item{sigdig}{number of significant digits to round the sampled covariates
+and simulated concentrations (\code{DV}) to, via \code{\link[=signif]{signif()}}, to further obscure
+the values. Default \code{4}. \code{NULL} disables rounding. Rounding is applied
+before the \code{loq} comparison.}
+
+\item{n_candidates}{number of independent candidates to draw and score against
+the observed data, keeping the closest match. Default \code{1} (no scoring; a
+single candidate is used). When greater than 1, the candidate with the
+smallest distance to the observed data (see \code{score_on}) is selected. The
+chosen candidate's score is attached to the result as the
+\code{"similarity_score"} attribute.}
+
+\item{similarity}{distribution-similarity metric used to score candidates.
+\code{"energy"} (default) is the energy distance between the observed and
+simulated feature matrices, standardized by the observed spread. Lower is
+closer. The score is population-level, not per-subject, so it does not push
+individual simulated subjects toward specific real subjects.}
+
+\item{score_on}{what to score candidates on when \code{n_candidates > 1}.
+\code{"concentration"} (default) scores the simulated concentration-time data:
+each candidate is fully simulated and its \verb{(time, log concentration)}
+observation cloud is compared to the observed concentrations, so the PK
+simulation is run once per candidate. \code{"covariate"} scores only the sampled
+covariate trajectories (baseline, mean, slope and within-subject SD per
+continuous covariate; per-subject time fraction in each level per
+categorical covariate), which is cheaper because the PK simulation is then
+run only once, on the selected covariate sample.}
 
 \item{seed}{optional integer seed used for covariate sampling and FeRx
 simulation. \code{NULL} (default) does not seed, so each call draws

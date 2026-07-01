@@ -406,3 +406,29 @@ test_that("a missing lag predictor carries the covariate forward, no recycling",
   expect_equal(out$WT[2], NA_real_)
   expect_equal(out$CRCL[2], 95)
 })
+
+test_that("design_id_var retains the matched observed subject id", {
+  set.seed(1)
+  dat <- data.frame(
+    ID = rep(1:6, each = 3),
+    TIME = rep(c(0, 1, 2), 6),
+    WT = rep(c(50, 60, 70, 80, 90, 100), each = 3) + stats::rnorm(18, 0, 1)
+  )
+  out <- suppressWarnings(sample_covariates_lme_timevarying(
+    dat, time_varying_covs = "WT", n_subjects = 6,
+    design_match = "clone", design_id_var = ".design_id", seed = 1
+  ))
+  expect_true(".design_id" %in% names(out))
+  expect_true(all(out$.design_id %in% as.character(dat$ID)))
+})
+
+test_that("design_id_var is rejected together with time_grid", {
+  dat <- data.frame(ID = rep(1:4, each = 2), TIME = rep(c(0, 1), 4), WT = rnorm(8, 70, 5))
+  expect_error(
+    sample_covariates_lme_timevarying(
+      dat, time_varying_covs = "WT", design_id_var = ".design_id",
+      time_grid = c(0, 1)
+    ),
+    "time_grid"
+  )
+})

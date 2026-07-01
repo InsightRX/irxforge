@@ -41,10 +41,20 @@
 #'   Default `NULL` omits this bookkeeping column.
 #' @param n_subjects number of simulated subjects. Default is the number of
 #'   unique observed subjects.
+#' @param baseline_method how baseline covariates are sampled. `"mice"`
+#'   (default) generates baselines with [sample_covariates_mice()]. `"bootstrap"`
+#'   resamples observed baseline rows with replacement via
+#'   [sample_covariates_bootstrap()], which reproduces the observed joint
+#'   baseline distribution instead of shrinking it toward the multivariate mean
+#'   as full-row MICE imputation tends to, especially in small datasets.
+#' @param noise optional single non-negative number giving the log-scale SD of
+#'   multiplicative log-normal noise (e.g. `0.05` for ~5%) applied to the
+#'   simulated output values to obscure them. `NULL` (default) applies no noise.
+#'   Time-varying covariates are jittered independently at each timepoint; static
+#'   covariates are jittered once per subject so they stay constant over time.
 #' @param conditional list with conditional limits applied to the **baseline**
-#'   covariate sample, passed through to [sample_covariates_mice()]. Sequential
-#'   transitions are not constrained. See [sample_covariates_mice()] for the
-#'   accepted format.
+#'   covariate sample. Sequential transitions are not constrained. See
+#'   [sample_covariates_mice()] for the accepted format.
 #' @param cont_method method used to predict continuous covariates within mice,
 #'   default is `pmm`.
 #' @param replicates number of independent simulated datasets to sample.
@@ -78,6 +88,8 @@ sample_covariates_mice_timevarying <- function(
   design_match_covs = NULL,
   design_id_var = NULL,
   n_subjects = length(unique(data[[id_var]])),
+  baseline_method = c("mice", "bootstrap"),
+  noise = NULL,
   conditional = NULL,
   cont_method = "pmm",
   replicates = 1,
@@ -87,6 +99,7 @@ sample_covariates_mice_timevarying <- function(
   if (!is.null(seed)) set.seed(seed)
   measurement_pattern <- match.arg(measurement_pattern)
   design_match <- match.arg(design_match)
+  baseline_method <- match.arg(baseline_method)
 
   if (!id_var %in% names(data)) {
     stop("`id_var` was not found in `data`.", call. = FALSE)
@@ -207,14 +220,13 @@ sample_covariates_mice_timevarying <- function(
 
   out <- vector("list", replicates)
   for (replicate_idx in seq_len(replicates)) {
-    baseline <- sample_covariates_mice(
-      data = baseline_data,
+    baseline <- sample_tv_baseline(
+      baseline_data = baseline_data,
+      baseline_method = baseline_method,
       cat_covs = intersect(cat_covs, covs),
       conditional = conditional,
       n_subjects = n_subjects,
       cont_method = cont_method,
-      replicates = 1,
-      seed = NULL,
       ...
     )
 
@@ -315,7 +327,13 @@ sample_covariates_mice_timevarying <- function(
       }
     }
 
-    out[[replicate_idx]] <- dplyr::bind_rows(replicate_rows)
+    out[[replicate_idx]] <- apply_timevarying_noise(
+      data = dplyr::bind_rows(replicate_rows),
+      id_var = id_var,
+      static_covs = static_covs,
+      time_varying_covs = time_varying_covs,
+      noise = noise
+    )
     if (replicates > 1) {
       out[[replicate_idx]][[".replicate"]] <- replicate_idx
     }

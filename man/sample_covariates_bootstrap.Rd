@@ -8,6 +8,8 @@ sample_covariates_bootstrap(
   data,
   n_subjects = nrow(data),
   conditional = NULL,
+  cat_covs = NULL,
+  noise = NULL,
   seed = NULL,
   na.rm = TRUE,
   ...
@@ -26,6 +28,15 @@ continuous covariates, specify a numeric vector of length 2 giving the
 \code{c(min, max)} range, e.g. \code{list("WT" = c(40, 60), "BMI" = c(15, 25))}.
 For categorical covariates (those listed in \code{cat_covs}), specify a character
 vector of the allowed category values, e.g. \code{list("SEX" = c("F"))}.}
+
+\item{cat_covs}{character vector of categorical covariates. Used to filter
+categorical \code{conditional} limits by value and to exclude these columns from
+the multiplicative \code{noise} jitter.}
+
+\item{noise}{optional single non-negative number giving the log-scale SD of
+multiplicative log-normal noise applied to the sampled continuous
+covariates (e.g. \code{0.05} for ~5\%), to obscure the original values. \code{NULL}
+(default) applies no noise.}
 
 \item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
 Default \code{NULL} does not set a seed.}

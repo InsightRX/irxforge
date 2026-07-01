@@ -51,12 +51,25 @@
 #' @param design_match_covs character vector of baseline covariates to use for
 #'   propensity-score design matching. Default is all static and time-varying
 #'   covariates.
+#' @param design_id_var optional column name for retaining the observed subject
+#'   ID whose observation-time design was assigned to each simulated subject.
+#'   Only usable when `time_grid = NULL`. Default `NULL` omits this column.
 #' @param n_subjects number of simulated subjects. Default is the number of
 #'   unique observed subjects.
+#' @param baseline_method how baseline covariates are sampled. `"mice"`
+#'   (default) generates baselines with [sample_covariates_mice()]. `"bootstrap"`
+#'   resamples observed baseline rows with replacement via
+#'   [sample_covariates_bootstrap()], which reproduces the observed joint
+#'   baseline distribution instead of shrinking it toward the multivariate mean
+#'   as full-row MICE imputation tends to, especially in small datasets.
+#' @param noise optional single non-negative number giving the log-scale SD of
+#'   multiplicative log-normal noise (e.g. `0.05` for ~5%) applied to the
+#'   simulated output values to obscure them. `NULL` (default) applies no noise.
+#'   Time-varying covariates are jittered independently at each timepoint; static
+#'   covariates are jittered once per subject so they stay constant over time.
 #' @param conditional list with conditional limits applied to the **baseline**
-#'   covariate sample, passed through to [sample_covariates_mice()]. Sequential
-#'   transitions are not constrained. See [sample_covariates_mice()] for the
-#'   accepted format.
+#'   covariate sample. Sequential transitions are not constrained. See
+#'   [sample_covariates_mice()] for the accepted format.
 #' @param cont_method method used to predict continuous covariates within mice
 #'   for the baseline sample, default is `pmm`.
 #' @param replicates number of independent simulated datasets to sample.
@@ -103,7 +116,10 @@ sample_covariates_lme_timevarying <- function(
   measurement_pattern = c("change", "nonmissing", "all"),
   design_match = c("clone", "propensity"),
   design_match_covs = NULL,
+  design_id_var = NULL,
   n_subjects = length(unique(data[[id_var]])),
+  baseline_method = c("mice", "bootstrap"),
+  noise = NULL,
   conditional = NULL,
   cont_method = "pmm",
   replicates = 1,
@@ -112,6 +128,7 @@ sample_covariates_lme_timevarying <- function(
 ) {
   if (!is.null(seed)) set.seed(seed)
   trend <- match.arg(trend)
+  baseline_method <- match.arg(baseline_method)
   measurement_pattern <- match.arg(measurement_pattern)
   design_match <- match.arg(design_match)
 
@@ -130,6 +147,12 @@ sample_covariates_lme_timevarying <- function(
   if (!is.null(time_grid) && design_match == "propensity") {
     stop(
       "`design_match = \"propensity\"` can only be used when `time_grid = NULL`.",
+      call. = FALSE
+    )
+  }
+  if (!is.null(time_grid) && !is.null(design_id_var)) {
+    stop(
+      "`design_id_var` can only be used when `time_grid = NULL`.",
       call. = FALSE
     )
   }
@@ -193,6 +216,12 @@ sample_covariates_lme_timevarying <- function(
       call. = FALSE
     )
   }
+  if (!is.null(design_id_var) && design_id_var %in% c(id_var, time_var, covs)) {
+    stop(
+      "`design_id_var` must not match `id_var`, `time_var`, or a covariate name.",
+      call. = FALSE
+    )
+  }
 
   data <- data |>
     dplyr::arrange(.data[[id_var]], .data[[time_var]])
@@ -250,14 +279,13 @@ sample_covariates_lme_timevarying <- function(
 
   out <- vector("list", replicates)
   for (replicate_idx in seq_len(replicates)) {
-    baseline <- sample_covariates_mice(
-      data = baseline_data,
+    baseline <- sample_tv_baseline(
+      baseline_data = baseline_data,
+      baseline_method = baseline_method,
       cat_covs = intersect(cat_covs, covs),
       conditional = conditional,
       n_subjects = n_subjects,
       cont_method = cont_method,
-      replicates = 1,
-      seed = NULL,
       ...
     )
 
@@ -295,12 +323,23 @@ sample_covariates_lme_timevarying <- function(
 
     current <- baseline
     current[[id_var]] <- seq_len(n_subjects)
+    if (!is.null(design_id_var)) {
+      current[[design_id_var]] <- as.character(vapply(
+        subject_profiles,
+        function(x) x$id,
+        character(1)
+      ))
+    }
     current[[time_var]] <- vapply(
       subject_profiles,
       function(x) x$time[[1]],
       numeric(1)
     )
-    current <- current[, c(id_var, time_var, covs), drop = FALSE]
+    current <- current[
+      ,
+      c(id_var, if (!is.null(design_id_var)) design_id_var, time_var, covs),
+      drop = FALSE
+    ]
 
     profile_lengths <- vapply(subject_profiles, function(x) length(x$time), integer(1))
     replicate_rows <- vector("list", max(profile_lengths))
@@ -351,7 +390,13 @@ sample_covariates_lme_timevarying <- function(
       }
     }
 
-    out[[replicate_idx]] <- dplyr::bind_rows(replicate_rows)
+    out[[replicate_idx]] <- apply_timevarying_noise(
+      data = dplyr::bind_rows(replicate_rows),
+      id_var = id_var,
+      static_covs = static_covs,
+      time_varying_covs = time_varying_covs,
+      noise = noise
+    )
     if (replicates > 1) {
       out[[replicate_idx]][[".replicate"]] <- replicate_idx
     }

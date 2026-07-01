@@ -1,0 +1,347 @@
+---
+title: "Anonymizing pharmacokinetic modeling datasets"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Anonymizing pharmacokinetic modeling datasets}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5
+)
+# Optional packages used only in some chunks.
+has_ferx <- requireNamespace("ferx", quietly = TRUE)
+has_vine <- requireNamespace("rvinecopulib", quietly = TRUE)
+```
+
+> Note: The example data and the FeRx model used in this vignette are bundled with the
+package under `inst/extdata` and accessed via `system.file()`.
+
+
+## Introduction
+
+Datasets can often not be shared, either because of privacy concerns, or because the rights to the data are not owned. If we would be able to anonymize the data sufficiently, however, we would be able to share them with others. This can be useful in various ways, e.g. allowing other researchers to reproduce models, allow
+testing and benchmarking for optimization of estimation algorithms or covariate selection approaches, or just to allow researchers to play around with certain types of datasets that are more realistic than purely simulated datasets with simplistic dosing/sampling designs.
+
+## Approach
+
+Real world pharmacokinetic modeling datasets can have various identifying information:
+
+- Subject ID numbers, study ID numbers, drug names, etc
+- Dates of birth, or age.
+- Date/time of sampling/dosing
+- Covariate data (esp. when extreme)
+- Concentration data
+
+We can take the following initial steps to strip PHI pretty easily:
+
+- Renumber ID from 1:n, so they have no relationship to any patient number
+- Remove any unnecessary columns (those not needed for modeling/analysis, and not used in covariate testing)
+- Simulate new drug concentration data (if we have a PK model)
+
+We can keep the dosing and sampling scheme as-is, as these are not considered PHI unless they can be linked to a specific subject in other ways.
+
+However, we would still need to have a set of covariates for each subject, ideally matching the structure and distributions in the original dataset. While it is fairly easy to generate samples of covariates that mimic the multi-variate distribution of static covariates (e.g. using multivariate normal distributions, MICE sampling, bootstrap sampling, or copulas), drawing realistic time-varying covariates is more challenging.
+
+## Sampling time-varying covariates
+
+```{r}
+library(irxforge)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+csv <- read.csv(
+ system.file("extdata", "vanco_nmdata.csv", package = "irxforge")
+) |>
+  mutate(CRCL = CRCLf)
+covs <- c("FFM", "CRCL")
+dat <- csv |>
+  select(ID, all_of(covs)) |>
+  filter(!duplicated(ID))
+dat_tv <- csv |>
+  select(ID, TIME, all_of(covs))
+```
+
+Our general covariate sampling methods don't allow for sampling of time-varying covariates. Bootstrap can technically be used, but then the time-varying values are retained exactly, and thus violating the requirement to sample new values (if used in the context of anonymization).
+
+We have however several options to sample covariates, while also retaining time-varying aspect:
+
+1. Sample using MICE, adapted to iteratively sample time-varying covariates. When covariate is time-varying, sample first the initial covariate sample using MICE. Then, iteratively, sample the next value based on the previous value and time. Keep going until all data points filled in.
+2. Build a simple linear mixed-effects model to describe covariate correlations, and correlation
+with time. Then simulate from this model.
+3. Copula sampling. For time-varying covariates we would first build simple linear mixed-effects models that describe their trajectories. In the copula sampling we then sample the model coefficients, rather than the actual samples, and use these to reconstruct trajectories.
+
+All approaches are relatively easy to implement. The latter two approaches have the benefit of generating entirely new samples, although the drawback is that they could generate examples that are less plausible (especially if the original dataset is small).
+
+### MICE sampling
+
+As an example, we'll use a vancomycin dataset here, which has these covariates:
+
+```{r}
+covs
+dat_tv |>
+  pivot_longer(cols = all_of(covs)) |>
+  ggplot(aes(x = TIME, y = value, group = ID), colour = name) +
+    geom_line() +
+    facet_wrap(~name, scales = "free") +
+    theme_classic()
+```
+
+Let's focus on the `CRCL` covariate, which shows the most variability over time:
+
+```{r}
+dat_tv |>
+  pivot_longer(cols = all_of(covs)) |>
+  filter(name == "CRCL") |>
+  ggplot(aes(x = TIME, y = value, group = ID), colour = name) +
+    geom_line() +
+    geom_point(size = 1) +
+    facet_wrap(~name, scales = "free") +
+    theme_bw()
+```
+
+We can show that with the timevarying-MICE sampling approach (`sample_covariates_mice_timevarying()`) we can sample covariate profiles that look similar to the one seen in the original dataset. We show here 5 simulated example draws, and the original in the bottom-right corner.
+
+```{r}
+dat_mice_tv <- data.frame()
+for (prop in c("propensity", "clone")) {
+  for (i in 1:5) {
+    dat_mice_tv <- bind_rows(
+      dat_mice_tv,
+      sample_covariates_mice_timevarying(
+        data = dat_tv,
+        id_var = "ID",
+        time_var = "TIME",
+        time_varying_covs = "CRCL",
+        design_match = prop,
+        baseline_method = "bootstrap",
+        design_match_covs = "CRCL",
+        seed = i
+      ) |>
+        mutate(
+          label = paste0("MICE_", i),
+          propensity = prop
+        )
+    )
+  }
+}
+
+dat_mice_tv |>
+  filter(propensity == "clone") |>
+  bind_rows(dat_tv |> mutate(label = "ORIG")) |>
+  arrange(ID, TIME) |>
+  pivot_longer(cols = all_of(covs)) |>
+  filter(name == "CRCL") |>
+  ggplot(aes(x = TIME, y = value, group = ID)) +
+    geom_line() +
+    geom_point(size = 1) +
+    facet_wrap(~label) +
+    theme_bw() +
+    ggtitle("Without propensity matching")
+```
+
+When we don't use any propensity matching, however, we can see that some of the profiles may be unexpected. It could be that some profiles are less realistic due to the fact that they don't match the dosing or sampling designs anymore. Therefore it would be good to apply propensity-score matching for the covariates for which it is relevant. This would lead to the following example draws:
+
+```{r}
+dat_mice_tv |>
+  filter(propensity == "propensity") |>
+  bind_rows(dat_tv |> mutate(label = "ORIG")) |>
+  arrange(ID, TIME) |>
+  pivot_longer(cols = all_of(covs)) |>
+  filter(name == "CRCL") |>
+  ggplot(aes(x = TIME, y = value, group = ID)) +
+    geom_line() +
+    geom_point(size = 1) +
+    facet_wrap(~label) +
+    theme_bw() +
+    ggtitle("With propensity matching")
+```
+
+### Linear model-based covariate simulation
+
+One drawback of the MICE-based sampling of covariates is that no purely new covariate values can be generated. In contrast to the bootstrap, it does let go of the constraint of sampling entire covariate sets per-subject, but still it can only sample covariate values it has seen in the dataset. So theoretically, especially with the propensity-score activated, it could be argued the "anonymization" is not sufficient using MICE, as it could actually be that the same "drawn" covariates are matched to the original subject, especially when using propensity-score matching.
+
+An alternative is to build a simple LME model for the covariate distributions, that also takes time into account. When simulating based on such a model, only new covariate values are drawn, ensuring a fuller anonymization. Also in this approach, applying propensity-score matching is useful, to ensure optimal realism in the new dataset.
+
+```{r}
+dat_lme_tv <- data.frame()
+for (prop in c("propensity", "clone")) {
+  for (i in 1:5) {
+    dat_lme_tv <- bind_rows(
+      dat_lme_tv,
+      sample_covariates_lme_timevarying(
+        data = dat_tv,
+        id_var = "ID",
+        time_var = "TIME",
+        trend = "time",
+        time_varying_covs = "CRCL",
+        design_match = prop,
+        design_match_covs = "CRCL",
+        seed = 1000 + i
+      ) |>
+        mutate(
+          label = paste0("LME_", i),
+          propensity = prop
+        )
+    )
+  }
+}
+
+dat_lme_tv |>
+  filter(propensity == "clone") |>
+  bind_rows(dat_tv |> mutate(label = "ORIG")) |>
+  arrange(ID, TIME) |>
+  pivot_longer(cols = all_of(covs)) |>
+  filter(name == "CRCL") |>
+  ggplot(aes(x = TIME, y = value, group = ID)) +
+    geom_line() +
+    geom_point(size = 1) +
+    facet_wrap(~label) +
+    theme_bw() +
+    ggtitle("Without propensity matching")
+
+dat_lme_tv |>
+  filter(propensity == "propensity") |>
+  bind_rows(dat_tv |> mutate(label = "ORIG")) |>
+  arrange(ID, TIME) |>
+  pivot_longer(cols = all_of(covs)) |>
+  filter(name == "CRCL") |>
+  ggplot(aes(x = TIME, y = value, group = ID)) +
+    geom_line() +
+    geom_point(size = 1) +
+    facet_wrap(~label) +
+    theme_bw() +
+    ggtitle("With propensity matching")
+```
+
+## Copulas
+
+Sampling covariates can also be done using copulas. Time-varyingness can be achieved by fitting a simple time-based model to the data, and then sampling the model coefficients using copulas rather than the actual values (Zwep et al. CPT-PSP 2023). We'll also add some noise (4%) to the data, otherwise the trajectories are very static. This section requires the `rvinecopulib` package.
+
+```{r, eval = has_vine}
+dat_copulas_tv <- data.frame()
+for (i in 1:5) {
+  dat_copulas_tv <- bind_rows(
+    dat_copulas_tv,
+    sample_covariates_copulas_timevarying(
+      data = dat_tv,
+      id_var = "ID",
+      time_var = "TIME",
+      degree = 2,
+      noise = 0.04,
+      time_varying_covs = "CRCL",
+      seed = 1000 + i
+    ) |>
+      mutate(
+        label = paste0("COPULAS_", i)
+      )
+  )
+}
+
+dat_copulas_tv |>
+  bind_rows(dat_tv |> mutate(label = "ORIG")) |>
+  arrange(ID, TIME) |>
+  pivot_longer(cols = all_of(covs)) |>
+  filter(name == "CRCL") |>
+  ggplot(aes(x = TIME, y = value, group = ID)) +
+    geom_line() +
+    geom_point(size = 1) +
+    facet_wrap(~label) +
+    theme_bw() +
+    ggtitle("Without propensity matching")
+```
+
+The timevarying nature of the simulated data looks a bit less like the original data now, compared to either MICE or LME methods.
+
+Overall, the data sampled with timevarying-MICE, with propensity-score matching, most resembles the original data.
+
+## Last step: concentration simulation
+
+Now that we have an approach to perform the sampling of time-varying covariates while maintaining realism in the time-varying aspects, we can perform the last step in this process: the simulation of the concentration-time curves.
+
+Again, to improve realism in the simulation, we could do another propensity-score matching step based on draws (etas) from the omega matrix. However, that would then destroy the matching we just did for the covariates. If the original dataset contained much treatment-adaptation, this may however warrant further consideration. One approach could be to also draw eta's before the covariate-propensity-matching is done, and match on both the relevant covariates as well as the relevant ETAs. But for most cases this may be overkill, and we'll leave that out of the generic functions for now.
+
+## Putting it all together: anonymize_dataset() function
+
+The function `anonymize_dataset()` combines all steps described above: the simple data cleaning, the sampling of (time-varying) covariates, and the simulation of concentration data. A single call can now generate a new dataset.
+
+The vancomycin model (`vanco_model.ferx`) drives clearance off `CRCLf` and the volumes off
+`FFM`, so those are the covariates we sample and anonymize. The structural
+columns (`ID`, `EVID`, `AMT`, `TIME`, `DV`, `RATE`) already use their default names in this dataset, so the default `dictionary` applies.
+
+One additional step aims to improve the realism of the simulated data further: we draw 10 candidate covariate sets and keep the one whose simulated concentration data most closely resembles the original, judged by a score that computes the deviance from the original data. This score can be based on the covariates, the simulated concentrations, or both. 
+
+Additionally, we round both the covariate data and the simulated concentration to 4 significant digits, and drop below-LOQ observations. 
+
+The simulation step requires the `ferx` package to simulate concentrations.
+
+```{r, echo = TRUE, eval = has_ferx}
+model_file <- system.file("extdata", "vanco_model.ferx", package = "irxforge")
+anon <- anonymize_dataset(
+  data         = csv,
+  method = "lme",
+  covariates   = c("FFM", "CRCLf"), 
+  model_file   = model_file,
+  dictionary   = list(
+    ID = "ID", EVID = "EVID", AMT = "AMT",
+    TIME = "TIME", DV = "DV", RATE = "RATE"
+  ),
+  n_candidates = 10,              # draw 10 candidates, keep the closest to the original
+  score_on     = "concentration", # score each candidate on its simulated concentrations
+  sigdig       = 4,               # round covariates and simulated concentrations
+  loq          = 2.0,             # vancomycin LOQ (mg/L)
+  blq_method   = "remove",        # drop below-LOQ observation rows
+  seed         = 26
+)
+head(anon)
+
+# How close the selected candidate was to the original (lower = closer)
+attr(anon, "similarity_score")
+```
+
+The result is a ready-to-share pharmacometric dataset: IDs renumbered `1:n`, identifying columns dropped, covariates resampled (and rounded), and concentrations re-simulated from the model.
+
+```{r, echo = TRUE, eval = has_ferx}
+bind_rows(
+  csv |> mutate(source = "original"),
+  anon |> mutate(source = "simulated")
+) |>
+  filter(EVID == 0) |>
+  ggplot(aes(x = TIME, y = DV, group = ID)) +
+    geom_line(alpha = 0.3) +
+    geom_point(size = 0.6, alpha = 0.5) +
+    scale_y_log10() +
+    theme_bw() +
+    facet_wrap(~source) +
+    ggtitle("Original vs anonymized, simulated concentration-time profiles")
+```
+
+The covariate distribution of CRCLf in this run looked like this:
+
+```{r}
+bind_rows(
+  csv |> mutate(source = "original"),
+  anon |> mutate(source = "simulated")
+) |>
+  filter(EVID == 0) |>
+  ggplot(aes(x = TIME, y = CRCLf, group = ID)) +
+    geom_line(alpha = 0.3) +
+    geom_point(size = 0.6, alpha = 0.5) +
+    scale_y_log10() +
+    theme_bw() +
+    facet_wrap(~source) +
+    ggtitle("Original vs anonymized, simulated CRCL")
+```
+
+## Disclaimer
+
+As you may have guessed, the initial dataset used in this example was itself also an anonymized copy of a real dataset...

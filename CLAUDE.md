@@ -49,6 +49,8 @@ devtools::install()
 - `sample_covariates_bootstrap()` — nonparametric resampling with replacement
 - `sample_covariates_mice()` — multiple imputation via chained equations (predictive mean matching)
 - `sample_covariates_nhanes()` — downloads/caches NHANES survey data; supports probability-proportional sampling via survey weights (`WTMEC2YR`)
+- `sample_covariates_copulas()` — fits a vine copula (Zwep et al. 2024, `rvinecopulib`) with kernel-density marginals to the observed covariates and samples virtual subjects, reproducing the full dependence structure (continuous covariates only)
+- `sample_covariates_mice_timevarying()` / `sample_covariates_lme_timevarying()` / `sample_covariates_copulas_timevarying()` — time-varying (longitudinal) covariate samplers. MICE resamples observed transitions via chained equations; LME fits per-covariate mixed-effects transition models; copulas (Zwep et al. 2024, `rvinecopulib`) fit a vine copula to per-subject polynomial-trajectory coefficients. The two MICE/LME samplers share a `baseline_method` (`"mice"`/`"bootstrap"`) and a `noise` (multiplicative log-normal jitter) option for the baseline draw.
 
 ### NHANES Caching (`R/download_nhanes_cache.R`, `R/zzz.R`)
 
@@ -66,5 +68,7 @@ The `.onLoad()` hook auto-downloads NHANES 2017–2018 data into `nhanes_cache/`
 - `admiral` — SDTM data handling in `reformat_data_sdtm_to_modeling()`
 - `mice` — multiple imputation in `sample_covariates_mice()`
 - `mvtnorm` — multivariate normal sampling
+- `nlme` — mixed-effects transition/trajectory models in the LME and copula time-varying samplers
+- `rvinecopulib` (Suggests) — vine copula fitting in `sample_covariates_copulas_timevarying()`
 - `irxutils` — custom utility package (GitHub: InsightRX/irxutils); provides `%<=%`, `%>=%`, `is_continuous()`
 - `nhanesA` (Suggests) — NHANES API access; only needed for `sample_covariates_nhanes()` and `download_nhanes_cache()`
