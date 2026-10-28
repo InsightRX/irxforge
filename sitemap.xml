@@ -20,6 +20,14 @@
 <url><loc>https://insightrx.github.io/irxforge/reference/index.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/irxforge-package.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/irxforge.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/mice_augment.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/mice_default_method.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/mice_design_matrix.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/mice_impute.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/mice_impute_variable.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/mice_logreg_draw.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/mice_match_donors.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/mice_norm_draw.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/nm_data_timepoints.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/not_supported_reformat.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/reformat_data.html</loc></url>

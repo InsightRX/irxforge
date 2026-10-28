@@ -12,7 +12,7 @@ sample_covariates_mice(
   cat_covs = NULL,
   conditional = NULL,
   n_subjects = nrow(data),
-  cont_method = "pmm",
+  cont_method = c("pmm", "norm"),
   replicates = 1,
   seed = NULL,
   ...
@@ -48,8 +48,8 @@ sample_covariates_mice(
 
 - cont_method:
 
-  method used to predict continuous covariates within mice, default is
-  `pmm`.
+  method used to impute continuous covariates, either `pmm` (predictive
+  mean matching, default) or `norm` (Bayesian linear regression).
 
 - replicates:
 
@@ -63,8 +63,9 @@ sample_covariates_mice(
 
 - ...:
 
-  additional arguments passed to
-  [`mice::mice()`](https://amices.org/mice/reference/mice.html) function
+  additional arguments passed to the internal MICE implementation, e.g.
+  `maxit` (number of iterations, default 5) or `donors` (number of
+  donors for predictive mean matching, default 5).
 
 ## Value
 
@@ -73,4 +74,10 @@ p columns
 
 ## Details
 
-missing values in `data` must be coded as NA
+missing values in `data` must be coded as NA.
+
+The imputation uses a minimal, internal re-implementation of the subset
+of the `mice` package that is needed here (predictive mean matching or
+Bayesian linear regression for continuous covariates, logistic
+regression for binary and polytomous regression for other categorical
+covariates). This avoids a dependency on `mice` and its dependency tree.

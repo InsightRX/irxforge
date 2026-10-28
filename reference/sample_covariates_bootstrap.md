@@ -50,8 +50,7 @@ sample_covariates_bootstrap(
 
 - ...:
 
-  additional arguments passed to
-  [`mice::mice()`](https://amices.org/mice/reference/mice.html) function
+  additional arguments (ignored).
 
 ## Value
 
