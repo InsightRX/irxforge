@@ -23,6 +23,7 @@ Imports:
     tidyr,
     tidyselect
 Suggests:
+    ggplot2,
     knitr,
     nhanesA,
     rmarkdown,
