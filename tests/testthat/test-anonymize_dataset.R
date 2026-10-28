@@ -589,3 +589,42 @@ test_that("covariate features ignore unused factor ID levels", {
   )
   expect_equal(nrow(feats), 2)
 })
+
+test_that("cat_covs marks numerically coded covariates as categorical", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
+    AMT = c(100, 0, 100, 0), DV = c(0, 5, 0, 4), SEX = c(0, 0, 1, 1),
+    WT = c(70, 70, 80, 80)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  expect_error(
+    anonymize_dataset(dat, covariates = c("WT", "SEX"), model_file = model,
+                      method = "lme", cat_covs = "SEX"),
+    "supports only continuous"
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", model_file = model, cat_covs = "SEX"),
+    "subset of `covariates`"
+  )
+
+  passed_cat_covs <- NULL
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(data, cat_covs, ...) {
+      passed_cat_covs <<- cat_covs
+      data.frame(
+        ID = c(1, 1, 2, 2), .design_id = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1),
+        WT = c(71, 71, 79, 79), SEX = factor(c("0", "0", "1", "1"))
+      )
+    },
+    simulate_anonymized_concentrations = function(...) {
+      data.frame(ID = c(1, 2), TIME = c(1, 1), DV_SIM = c(5, 4))
+    }
+  )
+  out <- anonymize_dataset(
+    dat, covariates = c("WT", "SEX"), model_file = model, cat_covs = "SEX"
+  )
+  expect_equal(passed_cat_covs, "SEX")
+  expect_type(out$SEX, "double")
+  expect_equal(out$SEX, c(0, 0, 1, 1))
+})

@@ -432,3 +432,38 @@ test_that("design_id_var is rejected together with time_grid", {
     "time_grid"
   )
 })
+
+test_that("non-converged mixed-effects transition fits fall back to OLS", {
+  # irregular sampling times, so that the mixed-effects fit converges normally
+  dat <- withr::with_seed(1, do.call(rbind, lapply(1:30, function(i) {
+    b <- stats::rnorm(1, 0, 3)
+    t <- cumsum(c(0, stats::runif(4, 0.5, 2)))
+    wt <- numeric(5)
+    wt[1] <- 70 + stats::rnorm(1, 0, 10)
+    for (k in 2:5) wt[k] <- 0.8 * wt[k - 1] + 14 + b + stats::rnorm(1, 0, 1)
+    data.frame(ID = i, TIME = t, WT = wt)
+  })))
+  expect_no_warning(
+    sample_covariates_lme_timevarying(
+      dat, time_varying_covs = "WT", n_subjects = 5, seed = 1
+    )
+  )
+
+  real_lme <- nlme::lme
+  # emulate nlme: non-convergence warns and returns the fit when
+  # returnObject = TRUE, and is an error otherwise
+  local_mocked_bindings(
+    lme = function(..., control) {
+      if (!isTRUE(control$returnObject)) stop("maximum number of iterations reached")
+      warning("maximum number of iterations reached")
+      real_lme(..., control = control)
+    },
+    .package = "nlme"
+  )
+  expect_warning(
+    sample_covariates_lme_timevarying(
+      dat, time_varying_covs = "WT", n_subjects = 5, seed = 1
+    ),
+    "ordinary least squares"
+  )
+})

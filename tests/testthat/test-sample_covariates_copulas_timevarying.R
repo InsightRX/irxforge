@@ -164,3 +164,30 @@ test_that("factor IDs with unused levels do not create empty designs", {
   expect_equal(nrow(out), 10 * 4)
   expect_false(anyNA(out))
 })
+
+test_that("non-converged random-slope fit falls back to random intercept", {
+  real_lme <- nlme::lme
+  random_used <- character()
+  # emulate nlme: non-convergence of the random-slope model warns and returns
+  # the fit when returnObject = TRUE, and is an error otherwise
+  local_mocked_bindings(
+    lme = function(fixed, random, ..., control) {
+      is_slope <- grepl("poly", paste(deparse(random), collapse = ""))
+      random_used <<- c(random_used, if (is_slope) "slope" else "intercept")
+      if (is_slope) {
+        if (!isTRUE(control$returnObject)) stop("maximum number of iterations reached")
+        warning("maximum number of iterations reached")
+      }
+      real_lme(fixed = fixed, random = random, ..., control = control)
+    },
+    .package = "nlme"
+  )
+  dat <- make_copula_test_data(n_subjects = 10)
+  ids <- sort(unique(dat$ID))
+  cf <- fit_copula_poly_coefficients(
+    data = dat, cov = "WEIGHT", id_var = "ID", time_var = "TIME",
+    degree = 1, ids = ids
+  )
+  expect_equal(random_used, c("slope", "intercept"))
+  expect_equal(nrow(cf), length(ids))
+})

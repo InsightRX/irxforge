@@ -512,7 +512,9 @@ fit_lme_transition_models <- function(
           random = random,
           data = td,
           na.action = stats::na.omit,
-          control = nlme::lmeControl(opt = "optim", returnObject = TRUE)
+          # returnObject = FALSE makes non-convergence an error, so that the
+          # OLS fallback below is used instead of a non-converged fit
+          control = nlme::lmeControl(opt = "optim", returnObject = FALSE)
         )),
         error = function(e) NULL
       )

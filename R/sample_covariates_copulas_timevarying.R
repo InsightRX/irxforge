@@ -380,19 +380,33 @@ fit_copula_poly_coefficients <- function(
   )
   random_intercept <- stats::as.formula(sprintf("~ 1 | %s", id_var))
 
-  ctrl <- nlme::lmeControl(opt = "optim", returnObject = TRUE)
-  fit <- tryCatch(
-    suppressWarnings(nlme::lme(
-      fixed = fixed, random = random_slope, data = data,
-      na.action = stats::na.omit, control = ctrl
-    )),
-    error = function(e) NULL
-  )
+  # returnObject = FALSE makes non-convergence an error, so that the
+  # random-intercept fallback is used instead of a non-converged fit
+  fit_lme <- function(random, return_object = FALSE) {
+    tryCatch(
+      suppressWarnings(nlme::lme(
+        fixed = fixed, random = random, data = data,
+        na.action = stats::na.omit,
+        control = nlme::lmeControl(opt = "optim", returnObject = return_object)
+      )),
+      error = function(e) NULL
+    )
+  }
+  fit <- fit_lme(random_slope)
   if (is.null(fit)) {
-    fit <- suppressWarnings(nlme::lme(
-      fixed = fixed, random = random_intercept, data = data,
-      na.action = stats::na.omit, control = ctrl
-    ))
+    fit <- fit_lme(random_intercept)
+  }
+  if (is.null(fit)) {
+    # last resort: use the random-intercept fit even if it did not converge
+    fit <- fit_lme(random_intercept, return_object = TRUE)
+    if (is.null(fit)) {
+      stop("Could not fit a trajectory model for `", cov, "`.", call. = FALSE)
+    }
+    warning(
+      "Random-intercept trajectory model for `", cov, "` did not converge; ",
+      "using the last iterate.",
+      call. = FALSE
+    )
   }
 
   cf <- stats::coef(fit)

@@ -11,6 +11,7 @@ anonymize_dataset(
   dictionary = list(ID = "ID", EVID = "EVID", AMT = "AMT", TIME = "TIME", DV = "DV", RATE
     = "RATE"),
   method = c("mice", "lme", "copulas"),
+  cat_covs = NULL,
   loq = NULL,
   blq_method = c("remove", "cens"),
   sigdig = 4,
@@ -39,6 +40,12 @@ optionally \code{RATE}. Defaults use the same names.}
 \code{\link[=sample_covariates_copulas_timevarying]{sample_covariates_copulas_timevarying()}}. Only \code{"mice"} supports
 categorical covariates; \code{"lme"} and \code{"copulas"} require all covariates to be
 continuous.}
+
+\item{cat_covs}{optional character vector of categorical covariates, in
+addition to factor and character covariates (which are always treated as
+categorical). Use this for numerically coded categorical covariates, e.g.
+\code{SEX = 0/1}, so they are not sampled as continuous values. They are
+returned with their original numeric codes.}
 
 \item{loq}{optional numeric limit of quantification. Simulated observations
 below \code{loq} are handled according to \code{blq_method}.}

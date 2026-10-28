@@ -17,6 +17,11 @@
 #'   [sample_covariates_copulas_timevarying()]. Only `"mice"` supports
 #'   categorical covariates; `"lme"` and `"copulas"` require all covariates to be
 #'   continuous.
+#' @param cat_covs optional character vector of categorical covariates, in
+#'   addition to factor and character covariates (which are always treated as
+#'   categorical). Use this for numerically coded categorical covariates, e.g.
+#'   `SEX = 0/1`, so they are not sampled as continuous values. They are
+#'   returned with their original numeric codes.
 #' @param loq optional numeric limit of quantification. Simulated observations
 #'   below `loq` are handled according to `blq_method`.
 #' @param blq_method how to handle simulated observations below `loq`.
@@ -72,6 +77,7 @@ anonymize_dataset <- function(
     RATE = "RATE"
   ),
   method = c("mice", "lme", "copulas"),
+  cat_covs = NULL,
   loq = NULL,
   blq_method = c("remove", "cens"),
   sigdig = 4,
@@ -124,12 +130,17 @@ anonymize_dataset <- function(
   id_var <- dictionary$ID
   time_var <- dictionary$TIME
 
+  if (!is.null(cat_covs) && !all(cat_covs %in% covariates)) {
+    stop("`cat_covs` must be a subset of `covariates`.", call. = FALSE)
+  }
   sample_data <- as.data.frame(data[, c(id_var, time_var, covariates), drop = FALSE])
-  cat_covs <- covariates[
+  # categorical covariates: those specified by the caller (e.g. numerically
+  # coded, such as SEX = 0/1) plus all factor or character covariates
+  cat_covs <- union(cat_covs, covariates[
     vapply(sample_data[covariates], function(x) {
       is.factor(x) || is.character(x)
     }, logical(1))
-  ]
+  ])
   if (method != "mice" && length(cat_covs) > 0) {
     stop(
       "`method = \"", method, "\"` supports only continuous covariates, but these ",
@@ -184,7 +195,7 @@ anonymize_dataset <- function(
 draw_anonymize_candidate <- function(
   method, sample_data, covariates, cat_covs, id_var, time_var, n_subjects, seed, ...
 ) {
-  switch(
+  sampled <- switch(
     method,
     mice = sample_covariates_mice_timevarying(
       data = sample_data, id_var = id_var, time_var = time_var,
@@ -204,6 +215,14 @@ draw_anonymize_candidate <- function(
       design_id_var = ".design_id", n_subjects = n_subjects, seed = seed, ...
     )
   )
+  # restore numerically coded categorical covariates (sampled as factors) to
+  # their original numeric codes
+  for (cov in cat_covs) {
+    if (is.numeric(sample_data[[cov]]) && !is.numeric(sampled[[cov]])) {
+      sampled[[cov]] <- as.numeric(as.character(sampled[[cov]]))
+    }
+  }
+  sampled
 }
 
 #' Draw, simulate and score candidates, returning the best anonymized dataset
