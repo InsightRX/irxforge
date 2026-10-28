@@ -92,8 +92,9 @@ covariates are jittered once per subject so they stay constant over time.}
 covariate sample. Sequential transitions are not constrained. See
 \code{\link[=sample_covariates_mice]{sample_covariates_mice()}} for the accepted format.}
 
-\item{cont_method}{method used to predict continuous covariates within mice,
-default is \code{pmm}.}
+\item{cont_method}{method used to impute continuous covariates, either
+\code{pmm} (predictive mean matching, default) or \code{norm} (Bayesian linear
+regression).}
 
 \item{replicates}{number of independent simulated datasets to sample.
 Default is 1. When greater than 1, a \code{.replicate} column is included.}
@@ -101,7 +102,8 @@ Default is 1. When greater than 1, a \code{.replicate} column is included.}
 \item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
 Default \code{NULL} does not set a seed.}
 
-\item{...}{additional arguments passed to \code{mice::mice()}.}
+\item{...}{additional arguments passed to the internal MICE implementation
+(e.g. \code{maxit}).}
 }
 \value{
 long-format data.frame with simulated subject IDs, time, static

@@ -70,8 +70,9 @@
 #' @param conditional list with conditional limits applied to the **baseline**
 #'   covariate sample. Sequential transitions are not constrained. See
 #'   [sample_covariates_mice()] for the accepted format.
-#' @param cont_method method used to predict continuous covariates within mice
-#'   for the baseline sample, default is `pmm`.
+#' @param cont_method method used to impute continuous covariates for the
+#'   baseline sample, either `pmm` (predictive mean matching, default) or
+#'   `norm` (Bayesian linear regression).
 #' @param replicates number of independent simulated datasets to sample.
 #'   Default is 1. When greater than 1, a `.replicate` column is included.
 #' @param seed integer random seed passed to [set.seed()] for reproducibility.

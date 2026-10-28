@@ -10,7 +10,7 @@ sample_covariates_mice(
   cat_covs = NULL,
   conditional = NULL,
   n_subjects = nrow(data),
-  cont_method = "pmm",
+  cont_method = c("pmm", "norm"),
   replicates = 1,
   seed = NULL,
   ...
@@ -33,8 +33,9 @@ vector of the allowed category values, e.g. \code{list("SEX" = c("F"))}.}
 \item{n_subjects}{number of simulated subjects, default is the number of
 subjects in the data.}
 
-\item{cont_method}{method used to predict continuous covariates within mice,
-default is \code{pmm}.}
+\item{cont_method}{method used to impute continuous covariates, either
+\code{pmm} (predictive mean matching, default) or \code{norm} (Bayesian linear
+regression).}
 
 \item{replicates}{number of multiple imputations replicates to sample.
 Default is 1.}
@@ -42,7 +43,9 @@ Default is 1.}
 \item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
 Default \code{NULL} does not set a seed.}
 
-\item{...}{additional arguments passed to \code{mice::mice()} function}
+\item{...}{additional arguments passed to the internal MICE implementation,
+e.g. \code{maxit} (number of iterations, default 5) or \code{donors} (number of
+donors for predictive mean matching, default 5).}
 }
 \value{
 data.frame with the simulated covariates, with n_subjects * m
@@ -54,5 +57,11 @@ need to be specified using the \code{cat_covs} argument, otherwise they will be
 treated as continuous.
 }
 \details{
-missing values in \code{data} must be coded as NA
+missing values in \code{data} must be coded as NA.
+
+The imputation uses a minimal, internal re-implementation of the subset of
+the \code{mice} package that is needed here (predictive mean matching or
+Bayesian linear regression for continuous covariates, logistic regression
+for binary and polytomous regression for other categorical covariates).
+This avoids a dependency on \code{mice} and its dependency tree.
 }

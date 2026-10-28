@@ -10,6 +10,7 @@
 #'   (default) applies no noise.
 #' @param na.rm logical. If `TRUE` (default), rows with `NA` in any column are
 #'   dropped before sampling.
+#' @param ... additional arguments (ignored).
 #'
 #' @returns a data.frame with the simulated covariates, with `n_subjects`
 #' rows and `p` columns

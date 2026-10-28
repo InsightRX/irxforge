@@ -17,15 +17,24 @@
 #' `c(min, max)` range, e.g. `list("WT" = c(40, 60), "BMI" = c(15, 25))`.
 #' For categorical covariates (those listed in `cat_covs`), specify a character
 #' vector of the allowed category values, e.g. `list("SEX" = c("F"))`.
-#' @param cont_method method used to predict continuous covariates within mice,
-#' default is `pmm`.
+#' @param cont_method method used to impute continuous covariates, either
+#' `pmm` (predictive mean matching, default) or `norm` (Bayesian linear
+#' regression).
 #' @param replicates number of multiple imputations replicates to sample.
 #' Default is 1.
 #' @param seed integer random seed passed to [set.seed()] for reproducibility.
 #' Default `NULL` does not set a seed.
-#' @param ... additional arguments passed to `mice::mice()` function
+#' @param ... additional arguments passed to the internal MICE implementation,
+#' e.g. `maxit` (number of iterations, default 5) or `donors` (number of
+#' donors for predictive mean matching, default 5).
 #'
-#' @details missing values in `data` must be coded as NA
+#' @details missing values in `data` must be coded as NA.
+#'
+#' The imputation uses a minimal, internal re-implementation of the subset of
+#' the `mice` package that is needed here (predictive mean matching or
+#' Bayesian linear regression for continuous covariates, logistic regression
+#' for binary and polytomous regression for other categorical covariates).
+#' This avoids a dependency on `mice` and its dependency tree.
 #'
 #' @returns data.frame with the simulated covariates, with n_subjects * m
 #' rows and p columns
@@ -36,33 +45,32 @@ sample_covariates_mice <- function(
   cat_covs = NULL,
   conditional = NULL,
   n_subjects = nrow(data),
-  cont_method = "pmm",
+  cont_method = c("pmm", "norm"),
   replicates = 1,
   seed = NULL,
   ...
 ) {
+  cont_method <- match.arg(cont_method)
   if (!is.null(seed)) set.seed(seed)
+
+  is_tbl <- tibble::is_tibble(data)
+  data <- as.data.frame(data)
+  data[cat_covs] <- lapply(data[cat_covs], as.factor)
+  rownames(data) <- NULL
 
   # names of continuous covariates
   cont_covs <- setdiff(names(data), cat_covs)
-  miss_vars <- names(data)[colSums(is.na(data)) > 0]
+  method <- mice_default_method(data)
+  method[cont_covs] <- cont_method
 
-  # impute missing data once with mice
-  if(length(miss_vars) > 0) {
-    data_f <- data |> # create copy of the original data set with factor version of categorical covariates
-      # TODO: mutate_at() is superseded by across()
-      dplyr::mutate_at(cat_covs, function(x) as.factor(x))
-    imp1 <- suppressWarnings(mice::mice( # Suppress "Number of logged events"
-      data_f,
-      m = 1,
-      printFlag = FALSE,
-      maxit = 15
-    ))
-    data <- mice::complete(imp1)
+  # impute missing data once
+  if (anyNA(data)) {
+    data <- mice_impute(data, method = method, m = 1, maxit = 15)[[1]]
   }
-  mi_data <- data[1:n_subjects, ] |>
-    # TODO: mutate_all() is superseded by across()
-    dplyr::mutate_all(function(x) NA)
+
+  # empty rows (with column types preserved) for the simulated subjects
+  mi_data <- data[rep(NA_integer_, n_subjects), , drop = FALSE]
+  rownames(mi_data) <- NULL
 
   if(!is.null(conditional)) {
     seed_covs <- names(conditional)
@@ -78,13 +86,17 @@ sample_covariates_mice <- function(
         )
       }
     }
+    if (nrow(pool_seed) == 0) {
+      stop("No subjects in `data` satisfy the `conditional` restrictions.")
+    }
     mi_data[seed_covs] <- pool_seed[
-      sample(1:nrow(pool_seed), n_subjects, replace = T), seed_covs
+      sample.int(nrow(pool_seed), n_subjects, replace = TRUE), seed_covs,
+      drop = FALSE
     ]
   }
 
   ## Run MICE via the shared runner used by the time-varying sampler too, so the
-  ## Type bookkeeping and predictor/method wiring cannot drift between the two.
+  ## predictor/method wiring cannot drift between the two.
   out <- run_mice_simulation(
     original = data,
     simulated = mi_data,
@@ -93,9 +105,8 @@ sample_covariates_mice <- function(
     cont_method = cont_method,
     m = replicates,
     ...
-  ) |>
-    dplyr::select(-".id", -".Type", -".imp")
-  if (tibble::is_tibble(data)) out <- tibble::as_tibble(out)
+  )
+  if (is_tbl) out <- tibble::as_tibble(out)
   out
 
 }

@@ -137,3 +137,38 @@ test_that("different seeds produce different output", {
   out2 <- sample_covariates_mice(dat, cat_covs = "SEX", n_subjects = 4, seed = 2)
   expect_false(identical(out1, out2))
 })
+
+test_that("cont_method norm is supported", {
+  dat <- data.frame(
+    AGE = c(20, 30, 40, 50), WT = c(55, 70, 65, 80), SEX = c("M", "F", "F", "M")
+  )
+  out <- sample_covariates_mice(
+    dat, cat_covs = "SEX", n_subjects = 10, cont_method = "norm", seed = 1
+  )
+  expect_equal(nrow(out), 10)
+  expect_false(anyNA(out))
+  expect_error(
+    sample_covariates_mice(dat, cat_covs = "SEX", cont_method = "cart"),
+    "should be one of"
+  )
+})
+
+test_that("n_subjects larger than data is supported", {
+  dat <- data.frame(
+    AGE = c(20, 30, 40, 50), WT = c(55, 70, 65, 80), SEX = c("M", "F", "F", "M")
+  )
+  out <- sample_covariates_mice(dat, cat_covs = "SEX", n_subjects = 25, seed = 1)
+  expect_equal(nrow(out), 25)
+  expect_false(anyNA(out))
+  expect_true(all(out$AGE %in% dat$AGE))
+})
+
+test_that("conditional without matching subjects gives informative error", {
+  dat <- data.frame(
+    AGE = c(20, 30, 40, 50), WT = c(55, 70, 65, 80), SEX = c("M", "F", "F", "M")
+  )
+  expect_error(
+    sample_covariates_mice(dat, cat_covs = "SEX", conditional = list(WT = c(1, 2))),
+    "No subjects"
+  )
+})

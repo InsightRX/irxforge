@@ -106,8 +106,9 @@ covariates are jittered once per subject so they stay constant over time.}
 covariate sample. Sequential transitions are not constrained. See
 \code{\link[=sample_covariates_mice]{sample_covariates_mice()}} for the accepted format.}
 
-\item{cont_method}{method used to predict continuous covariates within mice
-for the baseline sample, default is \code{pmm}.}
+\item{cont_method}{method used to impute continuous covariates for the
+baseline sample, either \code{pmm} (predictive mean matching, default) or
+\code{norm} (Bayesian linear regression).}
 
 \item{replicates}{number of independent simulated datasets to sample.
 Default is 1. When greater than 1, a \code{.replicate} column is included.}

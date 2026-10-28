@@ -55,13 +55,15 @@
 #' @param conditional list with conditional limits applied to the **baseline**
 #'   covariate sample. Sequential transitions are not constrained. See
 #'   [sample_covariates_mice()] for the accepted format.
-#' @param cont_method method used to predict continuous covariates within mice,
-#'   default is `pmm`.
+#' @param cont_method method used to impute continuous covariates, either
+#'   `pmm` (predictive mean matching, default) or `norm` (Bayesian linear
+#'   regression).
 #' @param replicates number of independent simulated datasets to sample.
 #'   Default is 1. When greater than 1, a `.replicate` column is included.
 #' @param seed integer random seed passed to [set.seed()] for reproducibility.
 #'   Default `NULL` does not set a seed.
-#' @param ... additional arguments passed to `mice::mice()`.
+#' @param ... additional arguments passed to the internal MICE implementation
+#'   (e.g. `maxit`).
 #'
 #' @details
 #' This function implements a first-order empirical transition sampler:
@@ -590,24 +592,25 @@ impute_mice_transition_step <- function(
 
 #' Run a single MICE simulation pass shared by the (time-varying) mice samplers
 #'
-#' Binds observed (`original`) and to-be-imputed (`simulated`) rows via an
-#' internal `.Type` flag, runs one set of chained equations, and returns the
-#' completed simulated rows in long format. Centralising this here keeps the
-#' `Type` bookkeeping, predictor-matrix wiring, method selection and warning
-#' handling identical across `sample_covariates_mice()` and the time-varying
-#' transition sampler so the two paths cannot drift.
+#' Stacks observed (`original`) and to-be-imputed (`simulated`) rows, runs one
+#' set of chained equations with the internal [mice_impute()], and returns the
+#' completed simulated rows. Centralising this here keeps the method selection
+#' identical across `sample_covariates_mice()` and the time-varying transition
+#' sampler so the two paths cannot drift.
 #'
 #' @param original observed data used as the imputation donors.
 #' @param simulated rows whose target columns are `NA` and will be imputed.
 #' @param cat_covs categorical covariates to coerce to factors before fitting.
 #' @param cont_covs continuous covariates to impute with `cont_method`.
-#' @param cont_method mice method for continuous covariates (e.g. `"pmm"`).
+#' @param cont_method imputation method for continuous covariates, `"pmm"` or
+#'   `"norm"`.
 #' @param m number of imputations.
 #' @param predicted_vars optional character vector restricting which columns are
-#'   imputed (others are excluded as both targets and predictors). `NULL`
-#'   imputes every column with missing values.
-#' @param ... additional arguments passed to `mice::mice()`.
-#' @returns long-format completed data filtered to the simulated rows.
+#'   imputed (other columns are only used as predictors). `NULL` imputes every
+#'   column with missing values.
+#' @param ... additional arguments passed to [mice_impute()], e.g. `maxit`.
+#' @returns data.frame with the completed simulated rows, stacked over the `m`
+#'   imputations.
 #' @noRd
 run_mice_simulation <- function(
   original,
@@ -619,39 +622,27 @@ run_mice_simulation <- function(
   predicted_vars = NULL,
   ...
 ) {
-  comb <- original |>
-    dplyr::mutate(.Type = "Original") |>
-    dplyr::bind_rows(
-      simulated |>
-        dplyr::mutate(.Type = "Simulated")
-    ) |>
-    dplyr::mutate(dplyr::across(dplyr::all_of(cat_covs), as.factor))
+  comb <- dplyr::bind_rows(
+    as.data.frame(original),
+    as.data.frame(simulated)
+  ) |>
+    dplyr::mutate(dplyr::across(dplyr::all_of(cat_covs), as.factor)) |>
+    as.data.frame()
+  rownames(comb) <- NULL
+  sim_rows <- nrow(original) + seq_len(nrow(simulated))
 
-  pred <- mice::make.predictorMatrix(comb)
-  pred[, ".Type"] <- 0
-  if (!is.null(predicted_vars)) {
-    pred[setdiff(rownames(pred), predicted_vars), ] <- 0
-  }
-
-  method <- mice::make.method(comb)
-  method[".Type"] <- ""
+  method <- mice_default_method(comb)
   if (!is.null(predicted_vars)) {
     method[setdiff(names(method), predicted_vars)] <- ""
   }
   method[intersect(cont_covs, names(method))] <- cont_method
 
-  suppressWarnings(
-    imp_data <- mice::mice(
-      comb,
-      m = m,
-      printFlag = FALSE,
-      predictorMatrix = pred,
-      method = method,
-      ...
-    )
-  )
+  imp_data <- mice_impute(comb, method = method, m = m, ...)
 
-  imp_data |>
-    tidyr::complete(action = "long") |>
-    dplyr::filter(.data$.Type == "Simulated")
+  out <- do.call(
+    rbind,
+    lapply(imp_data, function(x) x[sim_rows, , drop = FALSE])
+  )
+  rownames(out) <- NULL
+  out
 }
