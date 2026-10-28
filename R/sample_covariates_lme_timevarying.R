@@ -525,7 +525,7 @@ fit_lme_transition_models <- function(
       models[[cov]] <- list(
         fit = fit,
         type = "lme",
-        sigma = fit$sigma,
+        sigma = finite_or_zero(fit$sigma),
         tau = if (length(tau) == 1 && is.finite(tau)) tau else 0
       )
       next
@@ -543,7 +543,9 @@ fit_lme_transition_models <- function(
     models[[cov]] <- list(
       fit = lm_fit,
       type = "lm",
-      sigma = stats::sigma(lm_fit),
+      # a saturated OLS fit (no residual degrees of freedom) has a NaN residual
+      # SD, which would make every simulated transition NA
+      sigma = finite_or_zero(stats::sigma(lm_fit)),
       tau = 0
     )
   }
@@ -667,4 +669,8 @@ simulate_lme_transition_step <- function(
     out[[cov]][complete] <- mu + ranef[complete, cov] + residual
   }
   out
+}
+
+finite_or_zero <- function(x) {
+  if (length(x) == 1 && is.finite(x)) x else 0
 }

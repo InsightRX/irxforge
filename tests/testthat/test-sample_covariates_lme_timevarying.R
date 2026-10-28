@@ -467,3 +467,19 @@ test_that("non-converged mixed-effects transition fits fall back to OLS", {
     "ordinary least squares"
   )
 })
+
+test_that("saturated OLS fallback gives a zero (not NaN) residual SD", {
+  td <- data.frame(
+    ID = 1:3,
+    TIME = c(1, 2, 1.5),
+    .delta_time = c(1, 2, 1.5),
+    .WT_lag = c(60, 70, 80),
+    WT = c(61, 72, 79)
+  )
+  models <- fit_lme_transition_models(
+    transition_data = td, id_var = "ID", time_var = "TIME",
+    static_covs = NULL, time_varying_covs = "WT", cat_covs = NULL,
+    trend = "previous", random_intercept = FALSE
+  )
+  expect_equal(models$WT$sigma, 0)
+})
