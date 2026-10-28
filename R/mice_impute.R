@@ -197,8 +197,11 @@ mice_impute_variable <- function(y, ry, X, method, donors = 5L, ridge = 1e-5) {
     )
     as.vector(X_mis %*% beta)
   }, numeric(nrow(X_mis)))
-  eta <- matrix(eta, nrow = nrow(X_mis))
-  expeta <- exp(cbind(0, eta))
+  eta <- cbind(0, matrix(eta, nrow = nrow(X_mis)))
+  # numerically stable softmax: subtract the row maximum before exponentiation
+  eta[is.nan(eta)] <- 0
+  eta <- eta - apply(eta, 1, max)
+  expeta <- exp(eta)
   prob <- expeta / rowSums(expeta)
   # draw category for each missing value
   u <- stats::runif(nrow(prob))
@@ -264,7 +267,7 @@ mice_logreg_draw <- function(y, X) {
   } else {
     beta[pivot] <- coef[pivot] + as.vector(t(chol_v) %*% stats::rnorm(rank))
   }
-  beta[!est] <- 0
+  beta[!est | !is.finite(beta)] <- 0
   beta
 }
 

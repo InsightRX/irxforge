@@ -144,3 +144,22 @@ test_that("mice_match_donors picks among nearest donors", {
   idx <- mice_match_donors(yhat_obs, c(-5, 500), donors = 1)
   expect_equal(idx, c(1L, 7L))
 })
+
+test_that("categorical imputation is numerically stable for sparse, high-dimensional data", {
+  for (s in 1:10) {
+    set.seed(s)
+    dat <- as.data.frame(replicate(10, stats::rnorm(6)))
+    dat$RACE <- factor(c("A", "B", "C", NA, NA, NA))
+    out <- mice_impute(dat, m = 1, maxit = 3)[[1]]
+    expect_false(anyNA(out$RACE))
+  }
+})
+
+test_that("extreme linear predictors do not produce NaN probabilities", {
+  dat <- data.frame(
+    X = c(0, 1, 2, 1e6, -1e6),
+    RACE = factor(c("A", "B", "C", NA, NA))
+  )
+  out <- mice_impute(dat, method = c(X = ""), m = 1, maxit = 1)[[1]]
+  expect_false(anyNA(out$RACE))
+})
