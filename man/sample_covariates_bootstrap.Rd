@@ -33,7 +33,7 @@ Default \code{NULL} does not set a seed.}
 \item{na.rm}{logical. If \code{TRUE} (default), rows with \code{NA} in any column are
 dropped before sampling.}
 
-\item{...}{additional arguments passed to \code{mice::mice()} function}
+\item{...}{additional arguments (ignored).}
 }
 \value{
 a data.frame with the simulated covariates, with \code{n_subjects}
