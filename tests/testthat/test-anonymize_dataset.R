@@ -422,3 +422,100 @@ test_that("method routes to the requested time-varying sampler", {
   expect_equal(called, "lme")
   expect_equal(out$WT, c(72, 72, 73, 78, 78, 79))
 })
+
+test_that("simulated DV is matched by CMT for multiple compartments at same ID/TIME", {
+  data <- data.frame(
+    ID = c(1, 1, 1, 1, 1),
+    TIME = c(0, 1, 1, 2, 2),
+    EVID = c(1, 0, 0, 0, 0),
+    CMT = c(1, 2, 3, 2, 3),
+    DV = c(0, NA, NA, NA, NA)
+  )
+  # FeRx output in a different order than the input
+  sim <- data.frame(
+    ID = c(1, 1, 1, 1),
+    TIME = c(2, 1, 2, 1),
+    CMT = c(3, 3, 2, 2),
+    DV_SIM = c(23, 13, 22, 12)
+  )
+  out <- apply_simulated_concentrations(data, sim)
+  expect_equal(out$DV, c(0, 12, 13, 22, 23))
+})
+
+test_that("records sharing ID/TIME without CMT are matched in order of occurrence", {
+  data <- data.frame(
+    ID = c(1, 1, 1),
+    TIME = c(0, 1, 1),
+    EVID = c(1, 0, 0),
+    DV = c(0, NA, NA)
+  )
+  sim <- data.frame(ID = c(1, 1), TIME = c(1, 1), DV_SIM = c(5, 6))
+  out <- apply_simulated_concentrations(data, sim)
+  expect_equal(out$DV, c(0, 5, 6))
+})
+
+test_that("score_on = 'concentration' errors without positive observed concentrations", {
+  dat <- data.frame(
+    SUBJ = c("A", "A", "B", "B"),
+    TAD = c(0, 1, 0, 1),
+    EVENT = c(1, 0, 1, 0),
+    DOSE = c(100, 0, 200, 0),
+    CONC = c(0, 0, 0, 0),
+    WT = c(70, 70, 80, 80)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  expect_error(
+    anonymize_dataset(
+      data = dat,
+      covariates = "WT",
+      model_file = model,
+      dictionary = list(ID = "SUBJ", TIME = "TAD", EVID = "EVENT",
+                        AMT = "DOSE", DV = "CONC"),
+      n_candidates = 2,
+      score_on = "concentration",
+      seed = 1
+    ),
+    "positive observed concentrations"
+  )
+})
+
+test_that("score_on = 'concentration' falls back to first candidate if none can be scored", {
+  dat <- data.frame(
+    SUBJ = c("A", "A", "A", "B", "B", "B"),
+    TAD = c(0, 1, 2, 0, 1, 2),
+    EVENT = c(1, 0, 0, 1, 0, 0),
+    DOSE = c(100, 0, 0, 200, 0, 0),
+    CONC = c(0, 10, 8, 0, 12, 9),
+    WT = c(70, 70, 71, 80, 80, 81)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  candidate <- data.frame(
+    SUBJ = c(1, 1, 1, 2, 2, 2),
+    .design_id = c("A", "A", "A", "B", "B", "B"),
+    TAD = c(0, 1, 2, 0, 1, 2),
+    WT = c(72, 72, 73, 78, 78, 79)
+  )
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) candidate,
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      data.frame(ID = c(1, 1, 2, 2), TIME = c(1, 2, 1, 2), DV_SIM = c(0, 0, 0, 0))
+    }
+  )
+  expect_warning(
+    out <- anonymize_dataset(
+      data = dat,
+      covariates = "WT",
+      model_file = model,
+      dictionary = list(ID = "SUBJ", TIME = "TAD", EVID = "EVENT",
+                        AMT = "DOSE", DV = "CONC"),
+      n_candidates = 2,
+      score_on = "concentration",
+      seed = 1
+    ),
+    "first candidate"
+  )
+  expect_s3_class(out, "data.frame")
+  expect_equal(nrow(out), nrow(dat))
+})

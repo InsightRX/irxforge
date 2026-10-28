@@ -20,10 +20,10 @@ sample_covariates_bootstrap <- function(
   data,
   n_subjects = nrow(data),
   conditional = NULL,
-  cat_covs = NULL,
-  noise = NULL,
   seed = NULL,
   na.rm = TRUE,
+  cat_covs = NULL,
+  noise = NULL,
   ...
 ) {
   if (!is.null(seed)) set.seed(seed)

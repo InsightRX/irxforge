@@ -254,16 +254,32 @@ select_best_candidate <- function(
     data = data, evid_var = dictionary$EVID,
     time_var = time_var, dv_var = dictionary$DV
   )
+  if (nrow(observed_cloud) == 0) {
+    stop(
+      "`score_on = \"concentration\"` requires positive observed concentrations ",
+      "in `data`; use `score_on = \"covariate\"` or `n_candidates = 1` instead.",
+      call. = FALSE
+    )
+  }
   best <- NULL
   best_score <- Inf
   for (i in seq_len(n_candidates)) {
     candidate_seed <- if (is.null(seed)) NULL else as.integer(seed + i - 1L)
     anonymized <- simulate_candidate(draw_candidate(candidate_seed), candidate_seed)
     score <- score_concentration_similarity(observed_cloud, anonymized, similarity)
-    if (score < best_score) {
+    # keep the first candidate as fallback so a dataset is always returned,
+    # even if no candidate yields a finite score
+    if (is.null(best) || score < best_score) {
       best_score <- score
       best <- anonymized
     }
+  }
+  if (!is.finite(best_score)) {
+    warning(
+      "No candidate produced positive simulated concentrations; returning the ",
+      "first candidate without a similarity score.",
+      call. = FALSE
+    )
   }
   list(data = best, score = best_score)
 }
@@ -670,21 +686,32 @@ apply_simulated_concentrations <- function(data, sim) {
     )
   }
   # Match simulated concentrations back onto observation rows by ID and TIME
-  # rather than by position: FeRx is not guaranteed to return rows in the input
-  # order, so a positional copy can silently scramble subjects/timepoints.
+  # (and CMT when available) rather than by position: FeRx is not guaranteed to
+  # return rows in the input order, so a positional copy can silently scramble
+  # subjects/timepoints. Records sharing the same key (e.g. replicate samples)
+  # are matched in order of occurrence via `.occ`.
   if (all(c("ID", "TIME") %in% names(sim))) {
-    obs <- data[obs_idx, c("ID", "TIME"), drop = FALSE]
+    keys <- c("ID", "TIME")
+    if ("CMT" %in% names(sim) && "CMT" %in% names(data)) keys <- c(keys, "CMT")
+    occurrence <- function(df) {
+      grp <- interaction(df[keys], drop = TRUE, lex.order = TRUE)
+      stats::ave(seq_len(nrow(df)), grp, FUN = seq_along)
+    }
+    obs <- data[obs_idx, keys, drop = FALSE]
     obs[[".obs_order"]] <- seq_along(obs_idx)
+    obs[[".occ"]] <- occurrence(obs)
+    sim_keyed <- sim[, c(keys, "DV_SIM"), drop = FALSE]
+    sim_keyed[[".occ"]] <- occurrence(sim_keyed)
     merged <- merge(
       obs,
-      sim[, c("ID", "TIME", "DV_SIM"), drop = FALSE],
-      by = c("ID", "TIME"),
+      sim_keyed,
+      by = c(keys, ".occ"),
       sort = FALSE
     )
     if (nrow(merged) != length(obs_idx)) {
       stop(
         "FeRx simulation output could not be uniquely matched to observation ",
-        "records by ID and TIME.",
+        "records by ", paste(keys, collapse = ", "), ".",
         call. = FALSE
       )
     }

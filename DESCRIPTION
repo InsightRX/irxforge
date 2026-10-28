@@ -1,6 +1,6 @@
 Package: irxforge
 Title: Forging data for pharmacometric analyses
-Version: 0.0.0.9030
+Version: 0.0.0.9031
 Authors@R: c(
     person("Ron", "Keizer", email = "ron@insight-rx.com", role = c("cre", "aut")),
     person("Michael", "McCarthy", email = "michael.mccarthy@insight-rx.com", role = "ctb"),
@@ -23,6 +23,7 @@ Imports:
     tidyr,
     tidyselect
 Suggests:
+    ferx,
     ggplot2,
     knitr,
     nhanesA,
@@ -32,7 +33,8 @@ Suggests:
     withr
 VignetteBuilder: knitr
 Remotes:
-  InsightRX/irxutils
+  InsightRX/irxutils,
+  FeRx-NLME/ferx-r
 Config/testthat/edition: 3
 Encoding: UTF-8
 LazyData: true
