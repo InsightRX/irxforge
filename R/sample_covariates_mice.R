@@ -95,20 +95,17 @@ sample_covariates_mice <- function(
     ]
   }
 
-  comb <- rbind(data, mi_data)
-  sim_rows <- nrow(data) + seq_len(n_subjects)
-
-  ## Run MICE
-  imp_data <- mice_impute(
-    comb,
-    method = method,
+  ## Run MICE via the shared runner used by the time-varying sampler too, so the
+  ## predictor/method wiring cannot drift between the two.
+  out <- run_mice_simulation(
+    original = data,
+    simulated = mi_data,
+    cat_covs = cat_covs,
+    cont_covs = cont_covs,
+    cont_method = cont_method,
     m = replicates,
     ...
   )
-
-  ## Refactor and return
-  out <- do.call(rbind, lapply(imp_data, function(x) x[sim_rows, , drop = FALSE]))
-  rownames(out) <- NULL
   if (is_tbl) out <- tibble::as_tibble(out)
   out
 

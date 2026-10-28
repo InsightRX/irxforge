@@ -10,6 +10,8 @@ sample_covariates_bootstrap(
   conditional = NULL,
   seed = NULL,
   na.rm = TRUE,
+  cat_covs = NULL,
+  noise = NULL,
   ...
 )
 }
@@ -32,6 +34,15 @@ Default \code{NULL} does not set a seed.}
 
 \item{na.rm}{logical. If \code{TRUE} (default), rows with \code{NA} in any column are
 dropped before sampling.}
+
+\item{cat_covs}{character vector of categorical covariates. Used to filter
+categorical \code{conditional} limits by value and to exclude these columns from
+the multiplicative \code{noise} jitter.}
+
+\item{noise}{optional single non-negative number giving the log-scale SD of
+multiplicative log-normal noise applied to the sampled continuous
+covariates (e.g. \code{0.05} for ~5\%), to obscure the original values. \code{NULL}
+(default) applies no noise.}
 
 \item{...}{additional arguments (ignored).}
 }
