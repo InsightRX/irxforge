@@ -327,7 +327,7 @@ bind_rows(
 
 The covariate distribution of CRCLf in this run looked like this:
 
-```{r}
+```{r, eval = has_ferx}
 bind_rows(
   csv |> mutate(source = "original"),
   anon |> mutate(source = "simulated")
