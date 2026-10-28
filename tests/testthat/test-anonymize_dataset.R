@@ -557,3 +557,35 @@ test_that("MDV is recomputed from the simulated concentrations", {
   )
   expect_equal(removed$MDV, c(1L, 1L, 0L))
 })
+
+test_that("anonymize_dataset rejects time-reset records and replicates", {
+  dat <- data.frame(
+    ID = c(1, 1, 1, 1), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 4, 0),
+    AMT = c(100, 0, 100, 0), DV = c(0, 5, 0, 4), WT = 70
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", model_file = model),
+    "time-reset records"
+  )
+  dat$EVID[3] <- 1
+  dat$TIME <- c(0, 1, 2, 3)
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", model_file = model, replicates = 2),
+    "`replicates` is not supported"
+  )
+})
+
+test_that("covariate features ignore unused factor ID levels", {
+  dat <- data.frame(
+    ID = factor(c("b", "b", "c", "c"), levels = c("a", "b", "c")),
+    TIME = c(0, 1, 0, 1),
+    WT = c(70, 71, 80, 81)
+  )
+  feats <- build_covariate_features(
+    data = dat, id_var = "ID", time_var = "TIME",
+    covariates = "WT", cat_covs = character(0), cat_levels = list()
+  )
+  expect_equal(nrow(feats), 2)
+})

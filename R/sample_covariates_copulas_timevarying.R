@@ -204,7 +204,7 @@ sample_covariates_copulas_timevarying <- function(
   # Observed designs (time vectors per subject) for the clone path, and the
   # observed range of each time-varying covariate for optional truncation.
   observed_times <- lapply(
-    split(data[[time_var]], data[[id_var]]),
+    split(data[[time_var]], data[[id_var]], drop = TRUE),
     function(x) sort(x)
   )
   observed_ranges <- lapply(
@@ -305,7 +305,7 @@ make_copula_subject_table <- function(
 
   static_table <- NULL
   if (length(static_covs) > 0) {
-    splits <- split(data, data[[id_var]])
+    splits <- split(data, data[[id_var]], drop = TRUE)
     static_table <- do.call(
       rbind,
       lapply(splits, function(profile) profile[1, static_covs, drop = FALSE])

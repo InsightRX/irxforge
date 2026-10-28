@@ -94,6 +94,15 @@ anonymize_dataset <- function(
       is.na(n_candidates) || n_candidates < 1 || n_candidates != round(n_candidates)) {
     stop("`n_candidates` must be a single positive integer.", call. = FALSE)
   }
+  replicates <- list(...)[["replicates"]]
+  if (!is.null(replicates) && !identical(as.numeric(replicates), 1)) {
+    stop(
+      "`replicates` is not supported by `anonymize_dataset()`: each call ",
+      "returns a single anonymized dataset. Call it repeatedly (with ",
+      "different seeds) to generate multiple datasets.",
+      call. = FALSE
+    )
+  }
   data <- as.data.frame(data)
   dictionary <- normalize_anonymize_dictionary(dictionary)
   validate_anonymize_inputs(
@@ -103,6 +112,14 @@ anonymize_dataset <- function(
     dictionary = dictionary,
     loq = loq
   )
+  if (any(data[[dictionary$EVID]] %in% c(3, 4))) {
+    stop(
+      "Datasets with time-reset records (EVID 3 or 4) are not supported by ",
+      "`anonymize_dataset()`: the time-varying covariate samplers require a ",
+      "single, monotone time axis per subject.",
+      call. = FALSE
+    )
+  }
 
   id_var <- dictionary$ID
   time_var <- dictionary$TIME
@@ -386,7 +403,7 @@ select_best_covariate_sample <- function(
       candidate_feats = candidate_feats,
       similarity = similarity
     )
-    if (score < best_score) {
+    if (is.null(best) || score < best_score) {
       best_score <- score
       best <- candidate
     }
@@ -412,7 +429,7 @@ build_covariate_features <- function(
   cat_levels
 ) {
   cont_covs <- setdiff(covariates, cat_covs)
-  profiles <- split(data, data[[id_var]])
+  profiles <- split(data, data[[id_var]], drop = TRUE)
   rows <- lapply(profiles, function(profile) {
     profile <- profile[order(profile[[time_var]]), , drop = FALSE]
     times <- profile[[time_var]]

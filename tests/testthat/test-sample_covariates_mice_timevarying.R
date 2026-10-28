@@ -587,3 +587,17 @@ test_that("errors when design_id_var collides with an existing column", {
     "must not match"
   )
 })
+
+test_that("observation profiles ignore unused factor ID levels", {
+  dat <- data.frame(
+    ID = factor(c("b", "b", "c", "c"), levels = c("a", "b", "c")),
+    TIME = c(0, 1, 0, 1),
+    WT = c(70, 71, 80, 81)
+  )
+  profiles <- make_mice_observation_profiles(
+    data = dat, id_var = "ID", time_var = "TIME",
+    time_varying_covs = "WT", measurement_pattern = "all"
+  )
+  expect_length(profiles, 2)
+  expect_equal(vapply(profiles, function(p) p$id, character(1)), c("b", "c"), ignore_attr = TRUE)
+})

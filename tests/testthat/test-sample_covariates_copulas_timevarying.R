@@ -151,3 +151,16 @@ test_that("design_id_var retains the cloned observed subject id", {
   expect_true(".design_id" %in% names(out))
   expect_true(all(out$.design_id %in% as.character(dat$ID)))
 })
+
+test_that("factor IDs with unused levels do not create empty designs", {
+  skip_if_not_installed("rvinecopulib")
+  dat <- make_copula_test_data(n_subjects = 20)
+  dat$ID <- factor(dat$ID, levels = c("0", as.character(1:20)))
+  out <- sample_covariates_copulas_timevarying(
+    dat, static_covs = "AGE", time_varying_covs = c("WEIGHT", "CREAT"),
+    n_subjects = 10, seed = 1
+  )
+  expect_equal(length(unique(out$ID)), 10)
+  expect_equal(nrow(out), 10 * 4)
+  expect_false(anyNA(out))
+})

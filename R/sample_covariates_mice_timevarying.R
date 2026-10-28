@@ -470,7 +470,7 @@ make_mice_observation_profiles <- function(
   time_varying_covs,
   measurement_pattern
 ) {
-  profiles <- split(data, data[[id_var]])
+  profiles <- split(data, data[[id_var]], drop = TRUE)
   lapply(profiles, function(profile) {
     profile <- profile |>
       dplyr::arrange(.data[[time_var]])
