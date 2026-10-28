@@ -163,3 +163,15 @@ test_that("extreme linear predictors do not produce NaN probabilities", {
   out <- mice_impute(dat, method = c(X = ""), m = 1, maxit = 1)[[1]]
   expect_false(anyNA(out$RACE))
 })
+
+test_that("linear predictors overflowing to Inf do not produce NaN probabilities", {
+  dat <- data.frame(
+    X = c(0, 1e-8, 2e-8, 1e300, -1e300),
+    RACE = factor(c("A", "B", "C", NA, NA))
+  )
+  for (s in 1:20) {
+    set.seed(s)
+    out <- mice_impute(dat, method = c(X = ""), m = 1, maxit = 1)[[1]]
+    expect_false(anyNA(out$RACE))
+  }
+})

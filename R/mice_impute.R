@@ -99,6 +99,13 @@ mice_impute <- function(
         )
       }
     }
+    still_missing <- impute_vars[colSums(is.na(dat[impute_vars])) > 0]
+    if (length(still_missing) > 0) {
+      stop(
+        "Imputation failed to complete variable(s): ",
+        paste(still_missing, collapse = ", ")
+      )
+    }
     dat
   })
 }
@@ -198,8 +205,11 @@ mice_impute_variable <- function(y, ry, X, method, donors = 5L, ridge = 1e-5) {
     as.vector(X_mis %*% beta)
   }, numeric(nrow(X_mis)))
   eta <- cbind(0, matrix(eta, nrow = nrow(X_mis)))
-  # numerically stable softmax: subtract the row maximum before exponentiation
+  # numerically stable softmax: bound the linear predictors (overflow to +/-Inf
+  # would otherwise give Inf - Inf = NaN) and subtract the row maximum before
+  # exponentiation
   eta[is.nan(eta)] <- 0
+  eta <- pmin(pmax(eta, -500), 500)
   eta <- eta - apply(eta, 1, max)
   expeta <- exp(eta)
   prob <- expeta / rowSums(expeta)
