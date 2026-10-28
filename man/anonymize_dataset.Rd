@@ -46,7 +46,10 @@ below \code{loq} are handled according to \code{blq_method}.}
 \item{blq_method}{how to handle simulated observations below \code{loq}.
 \code{"remove"} (default) removes the below-LOQ observation rows. \code{"cens"} keeps
 them, sets their \code{DV} to \code{0}, and adds a \code{CENS} column with \code{1} for
-below-LOQ observations and \code{0} otherwise.}
+below-LOQ observations and \code{0} otherwise. If \code{data} contains an \code{MDV}
+column, it is recomputed from the simulated data: \code{1} for non-observation
+records and observations with a missing \code{DV}, \code{0} otherwise (censored
+observations keep \code{MDV = 0} and are flagged via \code{CENS}).}
 
 \item{sigdig}{number of significant digits to round the sampled covariates
 and simulated concentrations (\code{DV}) to, via \code{\link[=signif]{signif()}}, to further obscure

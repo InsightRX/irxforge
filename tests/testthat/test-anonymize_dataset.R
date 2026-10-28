@@ -519,3 +519,41 @@ test_that("score_on = 'concentration' falls back to first candidate if none can 
   expect_s3_class(out, "data.frame")
   expect_equal(nrow(out), nrow(dat))
 })
+
+test_that("MDV is recomputed from the simulated concentrations", {
+  dat <- data.frame(
+    ID = c(1, 1, 1, 1),
+    TIME = c(0, 1, 2, 3),
+    EVID = c(1, 0, 0, 0),
+    AMT = c(100, 0, 0, 0),
+    DV = c(0, 5, 0, 4),
+    MDV = c(1, 0, 1, 0), # original BLQ observation at TIME 2 has MDV = 1
+    WT = c(70, 70, 70, 70)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) {
+      data.frame(ID = 1, .design_id = 1, TIME = c(0, 1, 2, 3), WT = 70)
+    },
+    simulate_anonymized_concentrations = function(...) {
+      data.frame(ID = c(1, 1, 1), TIME = c(1, 2, 3), DV_SIM = c(NA_real_, 3, 0.5))
+    }
+  )
+
+  out <- anonymize_dataset(dat, covariates = "WT", model_file = model)
+  # dose -> 1, missing simulated DV -> 1, positive simulated DV -> 0
+  expect_equal(out$MDV, c(1L, 1L, 0L, 0L))
+
+  cens <- anonymize_dataset(
+    dat, covariates = "WT", model_file = model, loq = 1, blq_method = "cens"
+  )
+  expect_equal(cens$CENS, c(0L, 0L, 0L, 1L))
+  expect_equal(cens$MDV, c(1L, 1L, 0L, 0L))
+
+  removed <- anonymize_dataset(
+    dat, covariates = "WT", model_file = model, loq = 1, blq_method = "remove"
+  )
+  expect_equal(removed$MDV, c(1L, 1L, 0L))
+})

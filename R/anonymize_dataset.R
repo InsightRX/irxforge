@@ -22,7 +22,10 @@
 #' @param blq_method how to handle simulated observations below `loq`.
 #'   `"remove"` (default) removes the below-LOQ observation rows. `"cens"` keeps
 #'   them, sets their `DV` to `0`, and adds a `CENS` column with `1` for
-#'   below-LOQ observations and `0` otherwise.
+#'   below-LOQ observations and `0` otherwise. If `data` contains an `MDV`
+#'   column, it is recomputed from the simulated data: `1` for non-observation
+#'   records and observations with a missing `DV`, `0` otherwise (censored
+#'   observations keep `MDV = 0` and are flagged via `CENS`).
 #' @param sigdig number of significant digits to round the sampled covariates
 #'   and simulated concentrations (`DV`) to, via [signif()], to further obscure
 #'   the values. Default `4`. `NULL` disables rounding. Rounding is applied
@@ -147,6 +150,7 @@ anonymize_dataset <- function(
     loq = loq,
     blq_method = blq_method
   )
+  result <- recompute_anonymized_mdv(result)
   attr(result, "similarity_score") <- selected$score
   result
 }
@@ -720,6 +724,23 @@ apply_simulated_concentrations <- function(data, sim) {
   } else {
     data[["DV"]][obs_idx] <- sim[["DV_SIM"]]
   }
+  data
+}
+
+#' Recompute MDV from the final EVID and DV values
+#'
+#' The `MDV` column is cloned from the source data, but `DV` is replaced by the
+#' simulated concentrations (and possibly by BLQ handling), so the source flags
+#' no longer apply. Non-observation records and observations without a `DV` get
+#' `MDV = 1`; all other observations (including censored ones, which are
+#' flagged via `CENS`) get `MDV = 0`.
+#'
+#' @noRd
+recompute_anonymized_mdv <- function(data) {
+  if (!"MDV" %in% names(data)) {
+    return(data)
+  }
+  data$MDV <- as.integer(is.na(data$EVID) | data$EVID != 0 | is.na(data$DV))
   data
 }
 
