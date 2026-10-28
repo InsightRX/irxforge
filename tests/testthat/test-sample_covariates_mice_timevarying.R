@@ -601,3 +601,43 @@ test_that("observation profiles ignore unused factor ID levels", {
   expect_length(profiles, 2)
   expect_equal(vapply(profiles, function(p) p$id, character(1)), c("b", "c"), ignore_attr = TRUE)
 })
+
+test_that("categorical time-varying covariates may gain levels after baseline", {
+  dat <- data.frame(
+    ID = rep(1:8, each = 3),
+    TIME = rep(c(0, 1, 2), times = 8),
+    WT = 60 + rep(1:8, each = 3) + rep(c(0, 1, 2), times = 8),
+    STATE = rep(c("A", "A", "B"), times = 8) # "B" never occurs at baseline
+  )
+  out <- sample_covariates_mice_timevarying(
+    dat,
+    time_varying_covs = c("WT", "STATE"),
+    cat_covs = "STATE",
+    n_subjects = 8,
+    seed = 1
+  )
+  expect_equal(nrow(out), nrow(dat))
+  expect_true(all(as.character(out$STATE) %in% c("A", "B")))
+  expect_false(anyNA(out$STATE))
+})
+
+test_that("propensity inputs use factor labels, not integer codes", {
+  observed <- data.frame(SEX = c("M", "F", "M"))
+  sampled <- data.frame(SEX = factor(c("F", "M")))
+  out <- prep_mice_propensity_covariates(observed, sampled, cat_covs = "SEX")
+  expect_equal(as.character(out$SEX), c("M", "F", "M", "F", "M"))
+})
+
+test_that("propensity matching ignores single-level categorical covariates", {
+  baseline_data <- data.frame(SEX = factor(c("M", "M", "M")), WT = c(60, 70, 80))
+  baseline <- data.frame(SEX = factor(c("M", "M")), WT = c(79, 61))
+  idx <- match_mice_profiles_by_propensity(
+    baseline_data = baseline_data,
+    baseline = baseline,
+    design_match_covs = c("SEX", "WT"),
+    cat_covs = "SEX"
+  )
+  expect_length(idx, 2)
+  expect_true(all(idx %in% 1:3))
+  expect_false(anyDuplicated(idx) > 0)
+})

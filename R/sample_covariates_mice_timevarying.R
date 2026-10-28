@@ -259,6 +259,17 @@ sample_covariates_mice_timevarying <- function(
     }
 
     current <- baseline
+    # Time-varying categorical covariates can take levels later in a trajectory
+    # that are absent at baseline: extend the factor levels to all observed
+    # levels so that sampled transitions can be assigned.
+    for (cov in intersect(cat_covs, time_varying_covs)) {
+      if (is.factor(current[[cov]])) {
+        current[[cov]] <- factor(
+          as.character(current[[cov]]),
+          levels = union(levels(current[[cov]]), levels(factor(data[[cov]])))
+        )
+      }
+    }
     current[[id_var]] <- seq_len(n_subjects)
     if (!is.null(design_id_var)) {
       current[[design_id_var]] <- as.character(vapply(
@@ -320,7 +331,14 @@ sample_covariates_mice_timevarying <- function(
 
           for (cov in time_varying_covs) {
             update_rows <- active_update[, cov] & !is.na(next_covs[[cov]])
-            active_current[update_rows, cov] <- next_covs[update_rows, cov]
+            values <- next_covs[[cov]][update_rows]
+            # assign factor transitions by label (not integer code) when the
+            # current covariate is stored as character or numeric
+            if (is.factor(values) && !is.factor(active_current[[cov]])) {
+              values <- as.character(values)
+              if (is.numeric(active_current[[cov]])) values <- as.numeric(values)
+            }
+            active_current[update_rows, cov] <- values
           }
         }
         active_current[[time_var]] <- active_time
@@ -396,8 +414,18 @@ match_mice_profiles_by_propensity <- function(
   )
   combined[[".sampled"]] <- c(rep(0, nrow(observed)), rep(1, nrow(sampled)))
 
+  # constant categorical covariates carry no information and would make
+  # model.matrix() fail on contrasts for single-level factors
+  match_covs <- design_match_covs[vapply(
+    combined[design_match_covs],
+    function(x) !is.factor(x) || nlevels(x) > 1,
+    logical(1)
+  )]
+  if (length(match_covs) == 0) {
+    return(seq_len(nrow(sampled)))
+  }
   pred <- stats::model.matrix(
-    stats::reformulate(design_match_covs),
+    stats::reformulate(match_covs),
     data = combined
   )
   pred <- pred[, colnames(pred) != "(Intercept)", drop = FALSE]
@@ -443,12 +471,17 @@ match_mice_profiles_by_propensity <- function(
 prep_mice_propensity_covariates <- function(observed, sampled, cat_covs) {
   data <- data.frame(row.names = seq_len(nrow(observed) + nrow(sampled)))
   for (col in names(observed)) {
-    x <- c(observed[[col]], sampled[[col]])
-    if (col %in% cat_covs || is.factor(x) || is.character(x)) {
-      x <- as.character(x)
+    is_cat <- col %in% cat_covs ||
+      is.factor(observed[[col]]) || is.character(observed[[col]]) ||
+      is.factor(sampled[[col]]) || is.character(sampled[[col]])
+    if (is_cat) {
+      # convert each part to character before combining, so factors contribute
+      # their labels rather than their integer codes
+      x <- c(as.character(observed[[col]]), as.character(sampled[[col]]))
       x[is.na(x)] <- "<missing>"
       data[[col]] <- factor(x)
     } else {
+      x <- c(observed[[col]], sampled[[col]])
       if (!is.numeric(x)) {
         x <- as.numeric(x)
       }
