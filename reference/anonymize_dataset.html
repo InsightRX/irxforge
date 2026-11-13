@@ -84,7 +84,23 @@ subject <code>1:n</code> before the concentrations are simulated.</p></dd>
 
 
 <dt id="arg-model-file">model_file<a class="anchor" aria-label="anchor" href="#arg-model-file"></a></dt>
-<dd><p>path to a FeRx model file used to simulate concentrations.</p></dd>
+<dd><p>path to a FeRx model file used to simulate concentrations.
+The file is not used verbatim: a model written to fit the original data
+usually still describes that dataset, so the simulation runs on a temporary
+copy adapted to the anonymized dataset. In that copy the <code>[data_selection]</code>
+block (whose filters refer to original records and columns) and the
+deprecated <code>[initial_values]</code> block are removed; in the <code>[data]</code> block,
+<code>path</code> is replaced by the absolute path of the simulation dataset, and a
+column map is kept only when it renames a sampled covariate (from
+<code>covariates</code>) whose new name does not collide with a column that remains
+under its own name after all retained renames are applied (renames are
+simultaneous, so <code>HTCM = WT</code> with <code>WT = HT</code> is kept). Maps onto or from
+the structural columns (e.g. <code>AMT = DOSE</code>, <code>DV = lndv</code>) are dropped,
+because the anonymized dataset already uses the canonical names <code>ID</code>,
+<code>TIME</code>, <code>EVID</code>, <code>AMT</code>, <code>DV</code> and <code>RATE</code> (plus <code>CMT</code>, <code>MDV</code>, <code>ADDL</code>, <code>II</code>
+and <code>SS</code> when present in <code>data</code>). A relative <code>[priors]</code> <code>from_fit</code> path is
+made absolute against the directory of <code>model_file</code>, so it keeps resolving
+from the copy. Comments (<code>#</code> and <code>//</code>) are handled as FeRx handles them.</p></dd>
 
 
 <dt id="arg-dictionary">dictionary<a class="anchor" aria-label="anchor" href="#arg-dictionary"></a></dt>

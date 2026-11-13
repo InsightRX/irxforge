@@ -42,7 +42,24 @@ anonymize_dataset(
 
 - model_file:
 
-  path to a FeRx model file used to simulate concentrations.
+  path to a FeRx model file used to simulate concentrations. The file is
+  not used verbatim: a model written to fit the original data usually
+  still describes that dataset, so the simulation runs on a temporary
+  copy adapted to the anonymized dataset. In that copy the
+  `[data_selection]` block (whose filters refer to original records and
+  columns) and the deprecated `[initial_values]` block are removed; in
+  the `[data]` block, `path` is replaced by the absolute path of the
+  simulation dataset, and a column map is kept only when it renames a
+  sampled covariate (from `covariates`) whose new name does not collide
+  with a column that remains under its own name after all retained
+  renames are applied (renames are simultaneous, so `HTCM = WT` with
+  `WT = HT` is kept). Maps onto or from the structural columns (e.g.
+  `AMT = DOSE`, `DV = lndv`) are dropped, because the anonymized dataset
+  already uses the canonical names `ID`, `TIME`, `EVID`, `AMT`, `DV` and
+  `RATE` (plus `CMT`, `MDV`, `ADDL`, `II` and `SS` when present in
+  `data`). A relative `[priors]` `from_fit` path is made absolute
+  against the directory of `model_file`, so it keeps resolving from the
+  copy. Comments (`#` and `//`) are handled as FeRx handles them.
 
 - dictionary:
 
