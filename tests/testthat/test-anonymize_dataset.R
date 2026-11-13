@@ -753,3 +753,14 @@ test_that("design_cols overlapping event columns are kept once", {
   expect_named(out, c("ID", "TIME", "EVID", "AMT", "DV", "CMT", "OCC", "WT"))
   expect_equal(out$CMT, c(1, 2))
 })
+
+test_that("design_cols does not shift existing positional arguments", {
+  args <- names(formals(anonymize_dataset))
+  expect_equal(
+    args[seq_len(which(args == "seed"))],
+    c("data", "covariates", "model_file", "dictionary", "method", "cat_covs",
+      "loq", "blq_method", "sigdig", "n_candidates", "similarity", "score_on",
+      "seed")
+  )
+  expect_equal(tail(args, 2), c("design_cols", "..."))
+})
