@@ -134,4 +134,20 @@ anonymize_dataset(
 
 ## Value
 
-anonymized NONMEM-style data.frame.
+anonymized NONMEM-style data.frame, with one block of records per
+anonymized subject (`ID` `1:n`). Each block is a clone of one observed
+subject's dosing/observation design, returned **ordered by time within
+subject** (a stable sort on `TIME`, so records sharing a time keep their
+source order and records with a missing time are placed last). The
+result carries these attributes:
+
+- `"design_map"`: a `data.frame` with one row per anonymized subject and
+  columns `ID` (the anonymized subject ID) and `DESIGN_ID` (the ID of
+  the observed subject in `data` whose design was cloned, in its
+  original type). Use it to relate anonymized subjects back to their
+  source design without reconstructing it from the event records. Note
+  that this mapping links the anonymized dataset to the source subjects,
+  so it should not be shared alongside the anonymized data.
+
+- `"similarity_score"`: the selected candidate's score when
+  `n_candidates > 1`, otherwise `NULL`.

@@ -11,7 +11,7 @@ observed concentrations with FeRx-simulated values."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9038</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9039</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -174,8 +174,21 @@ independently.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>anonymized NONMEM-style data.frame.</p>
-    </div>
+    <p>anonymized NONMEM-style data.frame, with one block of records per
+anonymized subject (<code>ID</code> <code>1:n</code>). Each block is a clone of one observed
+subject's dosing/observation design, returned <strong>ordered by time within
+subject</strong> (a stable sort on <code>TIME</code>, so records sharing a time keep their
+source order and records with a missing time are placed last). The result
+carries these attributes:</p><ul><li><p><code>"design_map"</code>: a <code>data.frame</code> with one row per anonymized subject and
+columns <code>ID</code> (the anonymized subject ID) and <code>DESIGN_ID</code> (the ID of the
+observed subject in <code>data</code> whose design was cloned, in its original
+type). Use it to relate anonymized subjects back to their source design
+without reconstructing it from the event records. Note that this mapping
+links the anonymized dataset to the source subjects, so it should not be
+shared alongside the anonymized data.</p></li>
+<li><p><code>"similarity_score"</code>: the selected candidate's score when
+<code>n_candidates &gt; 1</code>, otherwise <code>NULL</code>.</p></li>
+</ul></div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
