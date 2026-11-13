@@ -4,6 +4,8 @@
 
 - [`add_nominal_timepoints()`](https://insightrx.github.io/irxforge/reference/add_nominal_timepoints.md)
   : Add nominal timepoints to a dataset
+- [`anonymize_dataset()`](https://insightrx.github.io/irxforge/reference/anonymize_dataset.md)
+  : Anonymize a NONMEM-style dataset
 - [`check_nm_dataset()`](https://insightrx.github.io/irxforge/reference/check_nm_dataset.md)
   : Run automated quality checks on a NONMEM dataset
 - [`create_demographics_table()`](https://insightrx.github.io/irxforge/reference/create_demographics_table.md)
@@ -40,9 +42,18 @@
   : Sample covariates using a variety of methods
 - [`sample_covariates_bootstrap()`](https://insightrx.github.io/irxforge/reference/sample_covariates_bootstrap.md)
   : Sample covariates using bootstrap
+- [`sample_covariates_copulas()`](https://insightrx.github.io/irxforge/reference/sample_covariates_copulas.md)
+  : Sample covariates using copula modeling
+- [`sample_covariates_copulas_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_copulas_timevarying.md)
+  : Sample time-varying covariates using copula modeling
+- [`sample_covariates_lme_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_lme_timevarying.md)
+  : Sample time-varying covariates using linear mixed-effects transition
+  models
 - [`sample_covariates_mice()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice.md)
   : Sample covariates using multivariate imputation using chained
   equations (mice)
+- [`sample_covariates_mice_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice_timevarying.md)
+  : Sample time-varying covariates using sequential MICE
 - [`sample_covariates_mvtnorm()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mvtnorm.md)
   : Sample covariates from multivariate normal distributions
 - [`sample_covariates_nhanes()`](https://insightrx.github.io/irxforge/reference/sample_covariates_nhanes.md)

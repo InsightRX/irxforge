@@ -11,7 +11,8 @@ continuous variables and non-integer values may be sampled.
 
 ``` r
 sample_covariates(
-  method = c("mvtnorm", "mice", "bootstrap", "nhanes"),
+  method = c("mvtnorm", "mice", "mice_timevarying", "lme_timevarying", "copulas",
+    "copulas_timevarying", "bootstrap", "nhanes"),
   seed = NULL,
   ...
 )
@@ -21,8 +22,10 @@ sample_covariates(
 
 - method:
 
-  sampling method, one of `mvtnorm`, `bootstrap`, `mice`, or `nhanes`.
-  E.g. `list(AGE = c(60, 80), WT = c(70, 100))`.
+  sampling method, one of `mvtnorm`, `bootstrap`, `mice`,
+  `mice_timevarying`, `lme_timevarying`, `copulas`,
+  `copulas_timevarying`, or `nhanes`. E.g.
+  `list(AGE = c(60, 80), WT = c(70, 100))`.
 
 - seed:
 

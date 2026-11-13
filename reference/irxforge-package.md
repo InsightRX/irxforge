@@ -13,6 +13,10 @@ Useful links:
 
 **Maintainer**: Ron Keizer <ron@insight-rx.com>
 
+Authors:
+
+- Ron Keizer <ron@insight-rx.com>
+
 Other contributors:
 
 - Michael McCarthy <michael.mccarthy@insight-rx.com> \[contributor\]

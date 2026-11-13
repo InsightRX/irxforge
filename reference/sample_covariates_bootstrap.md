@@ -11,6 +11,8 @@ sample_covariates_bootstrap(
   conditional = NULL,
   seed = NULL,
   na.rm = TRUE,
+  cat_covs = NULL,
+  noise = NULL,
   ...
 )
 ```
@@ -47,6 +49,19 @@ sample_covariates_bootstrap(
 
   logical. If `TRUE` (default), rows with `NA` in any column are dropped
   before sampling.
+
+- cat_covs:
+
+  character vector of categorical covariates. Used to filter categorical
+  `conditional` limits by value and to exclude these columns from the
+  multiplicative `noise` jitter.
+
+- noise:
+
+  optional single non-negative number giving the log-scale SD of
+  multiplicative log-normal noise applied to the sampled continuous
+  covariates (e.g. `0.05` for ~5%), to obscure the original values.
+  `NULL` (default) applies no noise.
 
 - ...:
 

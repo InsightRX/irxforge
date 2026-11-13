@@ -3,10 +3,13 @@
 <url><loc>https://insightrx.github.io/irxforge/CLAUDE.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/LICENSE-text.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/LICENSE.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/articles/anonymizing_datasets.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/articles/index.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/authors.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/index.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/news/index.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/add_nominal_timepoints.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/anonymize_dataset.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/apply_categorical_mapping.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/apply_categorical_mapping_auto.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/apply_categorical_mapping_manual.html</loc></url>
@@ -37,7 +40,11 @@
 <url><loc>https://insightrx.github.io/irxforge/reference/reformat_data_sdtm_to_modeling.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_bootstrap.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_copulas.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_copulas_timevarying.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_lme_timevarying.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_mice.html</loc></url>
+<url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_mice_timevarying.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_mvtnorm.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/sample_covariates_nhanes.html</loc></url>
 <url><loc>https://insightrx.github.io/irxforge/reference/syms_to_exprs.html</loc></url>

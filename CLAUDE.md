@@ -67,10 +67,30 @@ dispatches on `method` argument to: -
 [`sample_covariates_bootstrap()`](https://insightrx.github.io/irxforge/reference/sample_covariates_bootstrap.md)
 — nonparametric resampling with replacement -
 [`sample_covariates_mice()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice.md)
-— multiple imputation via chained equations (predictive mean matching) -
+— multiple imputation via chained equations (predictive mean matching),
+using the internal dependency-free
+[`mice_impute()`](https://insightrx.github.io/irxforge/reference/mice_impute.md)
+(`R/mice_impute.R`) -
 [`sample_covariates_nhanes()`](https://insightrx.github.io/irxforge/reference/sample_covariates_nhanes.md)
 — downloads/caches NHANES survey data; supports probability-proportional
-sampling via survey weights (`WTMEC2YR`)
+sampling via survey weights (`WTMEC2YR`) -
+[`sample_covariates_copulas()`](https://insightrx.github.io/irxforge/reference/sample_covariates_copulas.md)
+— fits a vine copula (Zwep et al. 2024, `rvinecopulib`) with
+kernel-density marginals to the observed covariates and samples virtual
+subjects, reproducing the full dependence structure (continuous
+covariates only) -
+[`sample_covariates_mice_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice_timevarying.md)
+/
+[`sample_covariates_lme_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_lme_timevarying.md)
+/
+[`sample_covariates_copulas_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_copulas_timevarying.md)
+— time-varying (longitudinal) covariate samplers. MICE resamples
+observed transitions via chained equations; LME fits per-covariate
+mixed-effects transition models; copulas (Zwep et al. 2024,
+`rvinecopulib`) fit a vine copula to per-subject polynomial-trajectory
+coefficients. The two MICE/LME samplers share a `baseline_method`
+(`"mice"`/`"bootstrap"`) and a `noise` (multiplicative log-normal
+jitter) option for the baseline draw.
 
 ### NHANES Caching (`R/download_nhanes_cache.R`, `R/zzz.R`)
 
@@ -98,9 +118,11 @@ DEMO, LAB, EXAM, and Q tables.
 
 - `admiral` — SDTM data handling in
   [`reformat_data_sdtm_to_modeling()`](https://insightrx.github.io/irxforge/reference/reformat_data_sdtm_to_modeling.md)
-- `mice` — multiple imputation in
-  [`sample_covariates_mice()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice.md)
 - `mvtnorm` — multivariate normal sampling
+- `nlme` — mixed-effects transition/trajectory models in the LME and
+  copula time-varying samplers
+- `rvinecopulib` (Suggests) — vine copula fitting in
+  [`sample_covariates_copulas_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_copulas_timevarying.md)
 - `irxutils` — custom utility package (GitHub: InsightRX/irxutils);
   provides `%<=%`, `%>=%`, `is_continuous()`
 - `nhanesA` (Suggests) — NHANES API access; only needed for
