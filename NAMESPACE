@@ -22,9 +22,13 @@ export(sample_covariates_mice_timevarying)
 export(sample_covariates_mvtnorm)
 export(sample_covariates_nhanes)
 importFrom(dplyr,"%>%")
-importFrom(irxutils,"%<=%")
-importFrom(irxutils,"%>=%")
-importFrom(irxutils,is_continuous)
+importFrom(irxutils,
+  "%<=%",
+  "%>=%",
+  is_continuous
+)
 importFrom(rlang,.data)
-importFrom(utils,read.csv)
-importFrom(utils,write.csv)
+importFrom(utils,
+  read.csv,
+  write.csv
+)
