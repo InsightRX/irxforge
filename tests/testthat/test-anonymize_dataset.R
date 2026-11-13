@@ -628,3 +628,67 @@ test_that("cat_covs marks numerically coded covariates as categorical", {
   expect_type(out$SEX, "double")
   expect_equal(out$SEX, c(0, 0, 1, 1))
 })
+
+test_that("anonymize_dataset accepts an empty covariate set", {
+  dat <- data.frame(
+    ID = c(11, 11, 11, 22, 22, 33, 33, 33),
+    TIME = c(0, 1, 2, 0, 4, 0, 1, 3),
+    DV = c(0, 4, 3, 0, 8, 0, 5, 2),
+    EVID = c(1, 0, 0, 1, 0, 1, 0, 0),
+    AMT = c(100, 0, 0, 200, 0, 300, 0, 0),
+    CMT = c(1, 2, 2, 1, 2, 1, 2, 2),
+    RATE = 0,
+    MDV = c(1, 0, 0, 1, 0, 1, 0, 0)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) {
+      stop("covariate sampler must not be called without covariates")
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      obs <- data[data$EVID == 0, ]
+      data.frame(ID = obs$ID, TIME = obs$TIME, CMT = obs$CMT, DV_SIM = obs$TIME * 10)
+    }
+  )
+
+  out <- anonymize_dataset(dat, covariates = character(0), model_file = model, seed = 3)
+
+  expect_named(out, c("ID", "TIME", "EVID", "AMT", "RATE", "DV", "CMT", "MDV"))
+  expect_setequal(unique(out$ID), 1:3)
+  expect_equal(nrow(out), nrow(dat))
+  # every observed design is cloned exactly once onto a renumbered subject
+  designs <- vapply(split(out, out$ID), function(d) {
+    paste(d$TIME, d$AMT, collapse = ";")
+  }, character(1))
+  orig <- vapply(split(dat, dat$ID), function(d) {
+    paste(d$TIME, d$AMT, collapse = ";")
+  }, character(1))
+  expect_setequal(unname(designs), unname(orig))
+  expect_equal(out$DV[out$EVID == 0], out$TIME[out$EVID == 0] * 10)
+  expect_equal(out$DV[out$EVID == 1], rep(0, 3))
+  # reproducible with a seed
+  expect_equal(
+    anonymize_dataset(dat, covariates = character(0), model_file = model, seed = 3),
+    out
+  )
+
+  # concentration scoring still works; covariate scoring has nothing to score
+  scored <- anonymize_dataset(
+    dat, covariates = character(0), model_file = model,
+    n_candidates = 2, seed = 3
+  )
+  expect_true(is.finite(attr(scored, "similarity_score")))
+  expect_error(
+    anonymize_dataset(
+      dat, covariates = character(0), model_file = model,
+      n_candidates = 2, score_on = "covariate"
+    ),
+    "requires at least one covariate"
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = NULL, model_file = model),
+    "must be a character vector"
+  )
+})
