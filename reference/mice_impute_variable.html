@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9043</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9044</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,7 +42,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mice_impute_variable</span><span class="op">(</span><span class="va">y</span>, <span class="va">ry</span>, <span class="va">X</span>, <span class="va">method</span>, donors <span class="op">=</span> <span class="fl">5L</span>, ridge <span class="op">=</span> <span class="fl">1e-05</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mice_impute_variable</span><span class="op">(</span><span class="va">y</span>, <span class="va">ry</span>, <span class="va">X</span>, <span class="va">method</span>, donors <span class="op">=</span> <span class="fl">5L</span>, ridge <span class="op">=</span> <span class="fl">1e-05</span>, var <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -75,6 +75,10 @@ for factors with more than 2 levels.</p></dd>
 <dt id="arg-ridge">ridge<a class="anchor" aria-label="anchor" href="#arg-ridge"></a></dt>
 <dd><p>ridge penalty used in the linear regression draws, to stabilize
 the estimation in case of collinear predictors.</p></dd>
+
+
+<dt id="arg-var">var<a class="anchor" aria-label="anchor" href="#arg-var"></a></dt>
+<dd><p>name of the variable being imputed, used in messages.</p></dd>
 
 </dl></div>
     <div class="section level2">

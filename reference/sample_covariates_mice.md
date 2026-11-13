@@ -2,7 +2,9 @@
 
 In contrast to sampling methods bootstrap and NHANES, categorical
 covariates need to be specified using the `cat_covs` argument, otherwise
-they will be treated as continuous.
+they will be treated as continuous. A warning is raised for numeric
+covariates that look like categorical codes (whole numbers with at most
+3 distinct values, e.g. `SEX = 0/1`) but are not listed in `cat_covs`.
 
 ## Usage
 

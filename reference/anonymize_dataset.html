@@ -11,7 +11,7 @@ observed concentrations with FeRx-simulated values."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9043</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9044</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -123,7 +123,9 @@ continuous.</p></dd>
 addition to factor and character covariates (which are always treated as
 categorical). Use this for numerically coded categorical covariates, e.g.
 <code>SEX = 0/1</code>, so they are not sampled as continuous values. They are
-returned with their original numeric codes.</p></dd>
+returned with their original numeric codes. With <code>method = "mice"</code>, a
+warning is raised for numeric covariates that look like categorical codes
+(whole numbers with at most 3 distinct values) but are not listed here.</p></dd>
 
 
 <dt id="arg-loq">loq<a class="anchor" aria-label="anchor" href="#arg-loq"></a></dt>

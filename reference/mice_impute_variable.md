@@ -5,7 +5,7 @@ Draw imputations for a single variable
 ## Usage
 
 ``` r
-mice_impute_variable(y, ry, X, method, donors = 5L, ridge = 1e-05)
+mice_impute_variable(y, ry, X, method, donors = 5L, ridge = 1e-05, var = NULL)
 ```
 
 ## Arguments
@@ -37,6 +37,10 @@ mice_impute_variable(y, ry, X, method, donors = 5L, ridge = 1e-05)
 
   ridge penalty used in the linear regression draws, to stabilize the
   estimation in case of collinear predictors.
+
+- var:
+
+  name of the variable being imputed, used in messages.
 
 ## Value
 

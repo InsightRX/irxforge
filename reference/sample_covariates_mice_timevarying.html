@@ -13,7 +13,7 @@ time, and any static covariates."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9043</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9044</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -112,7 +112,9 @@ timepoint. Default is all columns except <code>id_var</code>, <code>time_var</co
 
 <dt id="arg-cat-covs">cat_covs<a class="anchor" aria-label="anchor" href="#arg-cat-covs"></a></dt>
 <dd><p>character vector containing categorical covariates among
-<code>static_covs</code> and <code>time_varying_covs</code>.</p></dd>
+<code>static_covs</code> and <code>time_varying_covs</code>. A warning is raised for numeric
+covariates that look like categorical codes (whole numbers with at most 3
+distinct values, e.g. <code>SEX = 0/1</code>) but are not listed here.</p></dd>
 
 
 <dt id="arg-measurement-pattern">measurement_pattern<a class="anchor" aria-label="anchor" href="#arg-measurement-pattern"></a></dt>

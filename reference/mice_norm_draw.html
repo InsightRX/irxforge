@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9043</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9044</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,7 +42,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mice_norm_draw</span><span class="op">(</span><span class="va">y</span>, <span class="va">X</span>, ridge <span class="op">=</span> <span class="fl">1e-05</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">mice_norm_draw</span><span class="op">(</span><span class="va">y</span>, <span class="va">X</span>, ridge <span class="op">=</span> <span class="fl">1e-05</span>, var <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -61,11 +61,25 @@
 <dd><p>ridge penalty used in the linear regression draws, to stabilize
 the estimation in case of collinear predictors.</p></dd>
 
+
+<dt id="arg-var">var<a class="anchor" aria-label="anchor" href="#arg-var"></a></dt>
+<dd><p>name of the variable being imputed, used in messages.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>list with least-squares estimate <code>coef</code>, drawn coefficients <code>beta</code>
 and drawn residual standard deviation <code>sigma</code></p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>The penalized normal equations are solved on the correlation scale (the
+columns of <code>X</code> scaled to unit root-mean-square), which is mathematically
+identical to applying the ridge penalty <code>ridge * diag(crossprod(X))</code> but
+prevents predictors on very different scales from making the system
+numerically singular. If the system is still singular (e.g. because of
+(near-)collinear predictors), a pseudo-inverse is used instead and a warning
+naming the imputed variable and the collinear predictors is raised.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

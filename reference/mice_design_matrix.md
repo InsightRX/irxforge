@@ -16,4 +16,5 @@ mice_design_matrix(df)
 
 ## Value
 
-numeric matrix
+numeric matrix, with column names identifying the predictor (and factor
+level) of each column; the first column is the intercept

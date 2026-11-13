@@ -69,7 +69,9 @@ sample_covariates_mice_timevarying(
 - cat_covs:
 
   character vector containing categorical covariates among `static_covs`
-  and `time_varying_covs`.
+  and `time_varying_covs`. A warning is raised for numeric covariates
+  that look like categorical codes (whole numbers with at most 3
+  distinct values, e.g. `SEX = 0/1`) but are not listed here.
 
 - measurement_pattern:
 
