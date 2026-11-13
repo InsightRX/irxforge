@@ -2,6 +2,16 @@
 
 ## irxforge (development version)
 
+- [`anonymize_dataset()`](https://insightrx.github.io/irxforge/reference/anonymize_dataset.md):
+  `EVID == 0` records flagged `MDV == 1` (e.g. scheduled samples that
+  were never taken) no longer cause “FeRx simulation row count does not
+  match the number of observation records”. Observations are now counted
+  the way FeRx counts them (`EVID == 0 & (is.na(MDV) | MDV == 0)`);
+  those records keep a missing `DV` and `MDV = 1` in the output. If the
+  counts still disagree, the error reports how many rows FeRx returned,
+  how many `EVID == 0` records there are, and how many of them are
+  flagged `MDV == 1` (#24).
+
 - [`sample_covariates_mice_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice_timevarying.md):
   fixed a crash (“Can’t combine `..1$.SEX_lag` and `..2$.SEX_lag` ”)
   when categorical covariates are stored as integer codes and at least
