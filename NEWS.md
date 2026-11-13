@@ -1,5 +1,12 @@
 # irxforge (development version)
 
+* `anonymize_dataset()`: covariates are now checked up front for observed values,
+  before any sampling or design matching. Every covariate needs at least one
+  non-missing value overall and at least one on the baseline rows (each subject's
+  first record by time), which the samplers impute baselines from. All offending
+  covariates are reported at once, and the error says "no observed values at
+  baseline" when a covariate is observed only after baseline, instead of failing
+  deep inside `mice_impute()` with "Variable `HT` has no observed values" (#25).
 * `anonymize_dataset()`: `EVID == 0` records flagged `MDV == 1` (e.g. scheduled
   samples that were never taken) no longer cause "FeRx simulation row count does not
   match the number of observation records". Observations are now counted the way

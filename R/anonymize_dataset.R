@@ -688,6 +688,67 @@ validate_anonymize_inputs <- function(data, covariates, model_file, dictionary, 
   if (!is.null(loq) && (!is.numeric(loq) || length(loq) != 1 || is.na(loq))) {
     stop("`loq` must be a single numeric value.", call. = FALSE)
   }
+  check_anonymize_observed_covariates(
+    data = data,
+    covariates = covariates,
+    id_var = dictionary$ID,
+    time_var = dictionary$TIME
+  )
+}
+
+#' Check that every covariate has observed values overall and at baseline
+#'
+#' The time-varying covariate samplers impute baseline covariates from the first
+#' record of each subject (after ordering by time), so a covariate that is
+#' entirely missing on those baseline rows cannot be imputed even when it is
+#' observed later on. This check fails fast, before any sampling or design
+#' matching, and names all offending covariates at once, distinguishing
+#' covariates with no observed values at all from those with no observed values
+#' at baseline only.
+#'
+#' @param data NONMEM-style data.frame.
+#' @param covariates character vector of covariate columns in `data`.
+#' @param id_var,time_var names of the subject ID and time columns in `data`.
+#'
+#' @returns `invisible(TRUE)`; errors when any covariate lacks observed values
+#'   overall or on the baseline rows.
+#'
+#' @noRd
+check_anonymize_observed_covariates <- function(data, covariates, id_var, time_var) {
+  if (length(covariates) == 0 || nrow(data) == 0) return(invisible(TRUE))
+  # baseline rows: first record per subject after a stable sort on ID and time
+  # (missing times last), mirroring the time-varying samplers
+  ord <- order(data[[id_var]], data[[time_var]], na.last = TRUE, method = "radix")
+  sorted_ids <- data[[id_var]][ord]
+  baseline_rows <- ord[!duplicated(sorted_ids)]
+  observed_any <- vapply(covariates, function(cov) any(!is.na(data[[cov]])), logical(1))
+  observed_baseline <- vapply(covariates, function(cov) {
+    any(!is.na(data[[cov]][baseline_rows]))
+  }, logical(1))
+  none <- covariates[!observed_any]
+  none_baseline <- covariates[observed_any & !observed_baseline]
+  if (length(none) == 0 && length(none_baseline) == 0) return(invisible(TRUE))
+  problems <- c(
+    if (length(none) > 0) {
+      paste0("no observed values: ", paste(none, collapse = ", "))
+    },
+    if (length(none_baseline) > 0) {
+      paste0(
+        "no observed values at baseline (first record per subject): ",
+        paste(none_baseline, collapse = ", ")
+      )
+    }
+  )
+  stop(
+    "Covariates cannot be imputed because they have ",
+    paste(problems, collapse = "; and "), ". ",
+    "Drop these covariates",
+    if (length(none_baseline) > 0) {
+      ", or reshape the data so they are observed on each subject's first record"
+    },
+    ".",
+    call. = FALSE
+  )
 }
 
 #' Check that time is non-decreasing within every subject

@@ -853,3 +853,62 @@ test_that("cloned designs are time-ordered and exposed via the design map", {
   expect_equal(subj2$TIME, c(0, 0, 2, NA))
   expect_equal(subj2$EVID, c(0, 1, 0, 2))
 })
+
+test_that("covariates without observed values are rejected up front", {
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2),
+    TIME = c(0, 1, 0, 1),
+    EVID = c(1, 0, 1, 0),
+    AMT = c(100, 0, 100, 0),
+    DV = c(0, 5, 0, 6),
+    WT = c(70, 70, 80, 80),
+    HT = c(NA, 170, NA, 180),
+    AST = c(NA, 20, NA, NA),
+    ALT = NA_real_,
+    CREA = NA_real_
+  )
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) {
+      stop("sampler should not be reached")
+    }
+  )
+  err <- tryCatch(
+    anonymize_dataset(
+      dat, covariates = c("WT", "HT", "AST", "ALT", "CREA"), model_file = model
+    ),
+    error = conditionMessage
+  )
+  expect_match(err, "no observed values: ALT, CREA", fixed = TRUE)
+  expect_match(
+    err,
+    "no observed values at baseline (first record per subject): HT, AST",
+    fixed = TRUE
+  )
+  expect_false(grepl("sampler should not be reached", err))
+
+  # only baseline-missing covariates: message does not claim no values overall
+  err <- tryCatch(
+    anonymize_dataset(dat, covariates = c("WT", "HT"), model_file = model),
+    error = conditionMessage
+  )
+  expect_match(err, "at baseline")
+  expect_false(grepl("no observed values: ", err, fixed = TRUE))
+})
+
+test_that("baseline rows are the first record per subject ordered by time", {
+  # rows out of time order: the earliest record per subject is the baseline
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2),
+    TIME = c(1, 0, 1, 0),
+    HT = c(NA, 170, NA, NA)
+  )
+  expect_true(check_anonymize_observed_covariates(dat, "HT", "ID", "TIME"))
+  dat$HT <- c(170, NA, 180, NA)
+  expect_error(
+    check_anonymize_observed_covariates(dat, "HT", "ID", "TIME"),
+    "no observed values at baseline"
+  )
+  expect_true(check_anonymize_observed_covariates(dat, character(0), "ID", "TIME"))
+})
