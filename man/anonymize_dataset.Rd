@@ -45,9 +45,9 @@ simultaneous, so \code{HTCM = WT} with \code{WT = HT} is kept). Maps onto or fro
 the structural columns (e.g. \code{AMT = DOSE}, \code{DV = lndv}) are dropped,
 because the anonymized dataset already uses the canonical names \code{ID},
 \code{TIME}, \code{EVID}, \code{AMT}, \code{DV} and \code{RATE} (plus \code{CMT}, \code{MDV}, \code{ADDL}, \code{II}
-and \code{SS} when present in \code{data}). Other relative file references in the
-model (e.g. a \verb{[priors]} \code{from_fit} file) are not rewritten and should be
-given as absolute paths.}
+and \code{SS} when present in \code{data}). A relative \verb{[priors]} \code{from_fit} path is
+made absolute against the directory of \code{model_file}, so it keeps resolving
+from the copy. Comments (\verb{#} and \verb{//}) are handled as FeRx handles them.}
 
 \item{dictionary}{named list mapping expected NONMEM column names to columns
 in \code{data}. Supported keys are \code{ID}, \code{EVID}, \code{AMT}, \code{TIME}, \code{DV}, and

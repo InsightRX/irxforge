@@ -7,7 +7,9 @@
   are kept only when they rename a surviving covariate (maps onto or from structural
   columns, e.g. `AMT = DOSE` or `DV = lndv`, are dropped because the anonymized data
   already uses the canonical names). Simultaneous renames such as `HTCM = WT` with
-  `WT = HT` are preserved (#23).
+  `WT = HT` are preserved, a relative `[priors] from_fit` path is made absolute against
+  the original model's directory, and `#` and `//` comments are handled as FeRx
+  handles them (#23).
 * `anonymize_dataset()`: covariates are now checked up front for observed values,
   before any sampling or design matching. Every covariate needs at least one
   non-missing value overall and at least one on the baseline rows (each subject's

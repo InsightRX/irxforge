@@ -1044,3 +1044,63 @@ test_that("baseline rows are the first record per subject ordered by time", {
   )
   expect_true(check_anonymize_observed_covariates(dat, character(0), "ID", "TIME"))
 })
+
+test_that("prepare_simulation_model_file handles `//` and `#` comments like FeRx", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c(
+    "[data] // source dataset",
+    "  path = orig.csv // relative",
+    "  WT = weight // body weight",
+    "  AMT = DOSE # dose column",
+    "[data_selection]   // fitting-only filter",
+    "  ignore = FLAG == 1",
+    "[fit_options] # options",
+    "  method = foce // estimation"
+  ), model)
+  data_path <- tempfile(fileext = ".csv")
+  out <- prepare_simulation_model_file(
+    model, data_path, c("ID", "TIME", "EVID", "AMT", "DV", "weight")
+  )
+  abs_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+  expect_equal(readLines(out), c(
+    "[data] // source dataset",
+    paste0("  path = \"", abs_path, "\""),
+    "  WT = weight // body weight",
+    "[fit_options] # options",
+    "  method = foce // estimation"
+  ))
+})
+
+test_that("prepare_simulation_model_file makes a relative [priors] from_fit absolute", {
+  model_dir <- tempfile("model_dir")
+  dir.create(file.path(model_dir, "fits"), recursive = TRUE)
+  fit_file <- file.path(model_dir, "fits", "prev-fit.yaml")
+  file.create(fit_file)
+  model <- file.path(model_dir, "model.ferx")
+  writeLines(c(
+    "[priors]  // import",
+    "  from_fit = \"fits/prev-fit.yaml\" # previous run",
+    "[fit_options]",
+    "  method = foce"
+  ), model)
+  out <- prepare_simulation_model_file(model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV"))
+  lines <- readLines(out)
+  expect_equal(lines[1], "[priors]  // import")
+  abs_fit <- normalizePath(fit_file, winslash = "/")
+  expect_equal(lines[2], paste0("  from_fit = \"", abs_fit, "\""))
+  expect_true(file.exists(sub("^\\s*from_fit = \"(.*)\"$", "\\1", lines[2])))
+
+  # absolute references are left untouched
+  writeLines(c("[priors]", paste0("  from_fit = \"", abs_fit, "\"")), model)
+  out <- prepare_simulation_model_file(model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV"))
+  expect_equal(readLines(out), c("[priors]", paste0("  from_fit = \"", abs_fit, "\"")))
+})
+
+test_that("strip_ferx_comment and is_absolute_path follow FeRx/OS conventions", {
+  expect_equal(
+    strip_ferx_comment(c("a = b // c # d", "a = b # c // d", "a = b")),
+    c("a = b ", "a = b ", "a = b")
+  )
+  expect_true(all(is_absolute_path(c("/x/y", "~/x", "C:/x", "C:\\x", "\\\\srv\\x"))))
+  expect_false(any(is_absolute_path(c("x.yaml", "fits/x.yaml", "./x", "../x"))))
+})

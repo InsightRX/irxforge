@@ -24,9 +24,9 @@
 #'   the structural columns (e.g. `AMT = DOSE`, `DV = lndv`) are dropped,
 #'   because the anonymized dataset already uses the canonical names `ID`,
 #'   `TIME`, `EVID`, `AMT`, `DV` and `RATE` (plus `CMT`, `MDV`, `ADDL`, `II`
-#'   and `SS` when present in `data`). Other relative file references in the
-#'   model (e.g. a `[priors]` `from_fit` file) are not rewritten and should be
-#'   given as absolute paths.
+#'   and `SS` when present in `data`). A relative `[priors]` `from_fit` path is
+#'   made absolute against the directory of `model_file`, so it keeps resolving
+#'   from the copy. Comments (`#` and `//`) are handled as FeRx handles them.
 #' @param dictionary named list mapping expected NONMEM column names to columns
 #'   in `data`. Supported keys are `ID`, `EVID`, `AMT`, `TIME`, `DV`, and
 #'   optionally `RATE`. Defaults use the same names.
@@ -956,6 +956,11 @@ anonymized_structural_columns <- function() {
 #'   structural columns are dropped, because the anonymized frame already uses
 #'   the canonical names (`ID`, `TIME`, `EVID`, `AMT`, `DV`, ...).
 #'
+#' * a relative `[priors]` `from_fit` path, which FeRx resolves against the
+#'   model file's directory, is made absolute against the directory of
+#'   `model_file`, so it still resolves from the relocated copy.
+#'
+#' Lines are classified after stripping `#` and `//` comments, as FeRx does.
 #' All other lines, including comments, are copied verbatim.
 #'
 #' @param model_file path to the original FeRx model file.
@@ -974,15 +979,43 @@ prepare_simulation_model_file <- function(
   path = tempfile(fileext = ".ferx")
 ) {
   lines <- readLines(model_file, warn = FALSE)
-  header_re <- "^\\s*\\[\\s*([A-Za-z_][A-Za-z0-9_]*)(\\s+[^]]*)?\\]\\s*(#.*)?$"
-  is_header <- grepl(header_re, lines)
+  model_dir <- dirname(normalizePath(model_file, winslash = "/", mustWork = FALSE))
+  # Comments are stripped the way FeRx does (`#` and `//`) before any line is
+  # classified, so a commented header or key is read as FeRx reads it.
+  stripped <- strip_ferx_comment(lines)
+  header_re <- "^\\s*\\[\\s*([A-Za-z_][A-Za-z0-9_]*)(\\s+[^]]*)?\\]\\s*$"
+  is_header <- grepl(header_re, stripped)
   block <- rep(NA_character_, length(lines))
   current <- NA_character_
   for (i in seq_along(lines)) {
     if (is_header[i]) {
-      current <- tolower(sub(header_re, "\\1", lines[i]))
+      current <- tolower(sub(header_re, "\\1", stripped[i]))
     }
     block[i] <- current
+  }
+  split_key_value <- function(i) {
+    content <- trimws(stripped[i])
+    if (!nzchar(content) || !grepl("=", content, fixed = TRUE)) return(NULL)
+    value <- trimws(sub("^[^=]*=", "", content))
+    list(
+      key = trimws(sub("=.*$", "", content)),
+      value = gsub("^[\"']|[\"']$", "", value)
+    )
+  }
+  indent_of <- function(i) sub("^(\\s*).*$", "\\1", lines[i])
+
+  # `[priors] from_fit` is resolved by FeRx against the model file's directory;
+  # the copy lives elsewhere, so make a relative reference absolute against the
+  # original model's directory.
+  for (i in which(!is_header & !is.na(block) & block == "priors")) {
+    kv <- split_key_value(i)
+    if (is.null(kv) || kv$key != "from_fit" || !nzchar(kv$value)) next
+    if (!is_absolute_path(kv$value)) {
+      abs_fit <- normalizePath(
+        file.path(model_dir, kv$value), winslash = "/", mustWork = FALSE
+      )
+      lines[i] <- paste0(indent_of(i), "from_fit = \"", abs_fit, "\"")
+    }
   }
 
   drop_blocks <- c("data_selection", "initial_values")
@@ -997,17 +1030,15 @@ prepare_simulation_model_file <- function(
     map_target <- character(0)
     map_source <- character(0)
     for (i in data_body) {
-      content <- trimws(sub("#.*$", "", lines[i]))
-      if (!nzchar(content) || !grepl("=", content, fixed = TRUE)) next
-      key <- trimws(sub("=.*$", "", content))
-      value <- trimws(sub("^[^=]*=", "", content))
-      value <- gsub("^[\"']|[\"']$", "", value)
+      kv <- split_key_value(i)
+      if (is.null(kv)) next
+      key <- kv$key
+      value <- kv$value
       if (tolower(key) == "path") {
         if (path_written) {
           keep[i] <- FALSE
         } else {
-          indent <- sub("^(\\s*).*$", "\\1", lines[i])
-          lines[i] <- paste0(indent, "path = \"", abs_data_path, "\"")
+          lines[i] <- paste0(indent_of(i), "path = \"", abs_data_path, "\"")
           path_written <- TRUE
         }
         next
@@ -1036,6 +1067,23 @@ prepare_simulation_model_file <- function(
 
   writeLines(lines[keep], path)
   invisible(path)
+}
+
+#' Strip a trailing FeRx line comment
+#'
+#' FeRx ends a model-file line at the first `#` or `//`, whichever comes first
+#' (`strip_line_comment()` in ferx-core). Vectorized over `lines`.
+#'
+#' @noRd
+strip_ferx_comment <- function(lines) {
+  sub("(#|//).*$", "", lines)
+}
+
+#' Whether a file path is absolute (POSIX, home-relative or Windows)
+#'
+#' @noRd
+is_absolute_path <- function(path) {
+  grepl("^(/|~|[A-Za-z]:[/\\\\]|\\\\\\\\)", path)
 }
 
 #' Decide which `[data]` column renames can be applied together
