@@ -78,7 +78,7 @@ mice_impute <- function(
   incomplete <- names(data)[colSums(where) > 0 & method == ""]
   predictors <- setdiff(predictors, incomplete)
 
-  lapply(seq_len(m), function(i) {
+  dedupe_mice_warnings(lapply(seq_len(m), function(i) {
     dat <- data
     # initialize missing values with random draws from the observed values
     for (v in impute_vars) {
@@ -89,13 +89,23 @@ mice_impute <- function(
       for (v in impute_vars) {
         ry <- !where[, v]
         X <- mice_design_matrix(dat[setdiff(predictors, v)])
-        dat[!ry, v] <- mice_impute_variable(
-          y = dat[[v]],
-          ry = ry,
-          X = X,
-          method = method[[v]],
-          donors = donors,
-          ridge = ridge
+        dat[!ry, v] <- tryCatch(
+          mice_impute_variable(
+            y = dat[[v]],
+            ry = ry,
+            X = X,
+            method = method[[v]],
+            donors = donors,
+            ridge = ridge,
+            var = v
+          ),
+          error = function(e) {
+            stop(
+              "Imputation of variable `", v, "` (method `", method[[v]],
+              "`) failed: ", conditionMessage(e),
+              call. = FALSE
+            )
+          }
         )
       }
     }
@@ -107,7 +117,7 @@ mice_impute <- function(
       )
     }
     dat
-  })
+  }))
 }
 
 #' Default imputation method per variable, based on variable type
@@ -145,23 +155,28 @@ mice_default_method <- function(data, method = NULL) {
 #' Factors are dummy-coded, and constant predictors are dropped.
 #'
 #' @param df data.frame with complete predictor data
-#' @returns numeric matrix
+#' @returns numeric matrix, with column names identifying the predictor (and
+#'   factor level) of each column; the first column is the intercept
 #' @keywords internal
 mice_design_matrix <- function(df) {
-  cols <- lapply(df, function(x) {
+  cols <- lapply(names(df), function(nm) {
+    x <- df[[nm]]
     if (is.factor(x)) {
       x <- droplevels(x)
       if (nlevels(x) < 2) return(NULL)
-      stats::model.matrix(~ x)[, -1, drop = FALSE]
+      out <- stats::model.matrix(~ x)[, -1, drop = FALSE]
+      dimnames(out) <- list(NULL, paste0(nm, levels(x)[-1]))
+      out
     } else if (is.numeric(x)) {
       if (length(unique(x)) < 2) return(NULL)
-      matrix(as.numeric(x), ncol = 1)
+      matrix(as.numeric(x), ncol = 1, dimnames = list(NULL, nm))
     } else {
       NULL
     }
   })
-  X <- do.call(cbind, c(list(rep(1, nrow(df))), cols))
-  unname(X)
+  intercept <- matrix(1, nrow = nrow(df), ncol = 1,
+                      dimnames = list(NULL, "(Intercept)"))
+  do.call(cbind, c(list(intercept), cols))
 }
 
 #' Draw imputations for a single variable
@@ -169,14 +184,17 @@ mice_design_matrix <- function(df) {
 #' @param y vector with current (completed) values of the variable
 #' @param ry logical vector, `TRUE` where `y` was originally observed
 #' @param X design matrix
+#' @param var name of the variable being imputed, used in messages.
 #' @inheritParams mice_impute
 #' @returns vector of imputed values for `y[!ry]`
 #' @keywords internal
-mice_impute_variable <- function(y, ry, X, method, donors = 5L, ridge = 1e-5) {
+mice_impute_variable <- function(
+  y, ry, X, method, donors = 5L, ridge = 1e-5, var = NULL
+) {
   X_obs <- X[ry, , drop = FALSE]
   X_mis <- X[!ry, , drop = FALSE]
   if (method %in% c("pmm", "norm")) {
-    draw <- mice_norm_draw(y[ry], X_obs, ridge = ridge)
+    draw <- mice_norm_draw(y[ry], X_obs, ridge = ridge, var = var)
     if (method == "norm") {
       return(
         as.vector(X_mis %*% draw$beta) + stats::rnorm(nrow(X_mis)) * draw$sigma
@@ -224,24 +242,188 @@ mice_impute_variable <- function(y, ry, X, method, donors = 5L, ridge = 1e-5) {
 #'
 #' Following Rubin (1987, p. 167), as implemented in `mice:::.norm.draw()`.
 #'
+#' The penalized normal equations are solved on the correlation scale (the
+#' columns of `X` scaled to unit root-mean-square), which is mathematically
+#' identical to applying the ridge penalty `ridge * diag(crossprod(X))` but
+#' prevents predictors on very different scales from making the system
+#' numerically singular. If the system is still singular (e.g. because of
+#' (near-)collinear predictors), a pseudo-inverse is used instead and a warning
+#' naming the imputed variable and the collinear predictors is raised.
+#'
 #' @param y numeric outcome vector (observed values)
 #' @param X design matrix for observed values
+#' @param var name of the variable being imputed, used in messages.
 #' @inheritParams mice_impute
 #' @returns list with least-squares estimate `coef`, drawn coefficients `beta`
 #' and drawn residual standard deviation `sigma`
 #' @keywords internal
-mice_norm_draw <- function(y, X, ridge = 1e-5) {
+mice_norm_draw <- function(y, X, ridge = 1e-5, var = NULL) {
   xtx <- crossprod(X)
-  pen <- ridge * diag(xtx)
+  s <- sqrt(diag(xtx))
+  s[!is.finite(s) | s == 0] <- 1
+  scale_mat <- outer(s, s)
+  sxtx <- xtx / scale_mat
+  pen <- ridge * diag(sxtx)
   pen[pen == 0] <- ridge
-  v <- solve(xtx + diag(pen, nrow = ncol(X)))
+  a <- sxtx + diag(pen, nrow = ncol(X))
+  v <- tryCatch(solve(a), error = function(e) NULL)
+  if (is.null(v)) {
+    v <- mice_pseudo_inverse(a)
+    mice_warn_collinear(var, mice_collinear_predictors(X))
+  }
+  v <- v / scale_mat
   v <- (v + t(v)) / 2
   coef <- v %*% crossprod(X, y)
   residuals <- y - X %*% coef
   df <- max(length(y) - ncol(X), 1)
   sigma <- sqrt(sum(residuals^2) / stats::rchisq(1, df))
-  beta <- coef + t(chol(v)) %*% stats::rnorm(ncol(X)) * sigma
+  beta <- coef + mice_sqrt_psd(v) %*% stats::rnorm(ncol(X)) * sigma
   list(coef = as.vector(coef), beta = as.vector(beta), sigma = sigma)
+}
+
+#' Moore-Penrose pseudo-inverse of a symmetric matrix
+#'
+#' @param a symmetric numeric matrix
+#' @returns pseudo-inverse of `a`
+#' @keywords internal
+mice_pseudo_inverse <- function(a) {
+  e <- eigen((a + t(a)) / 2, symmetric = TRUE)
+  tol <- max(dim(a)) * max(abs(e$values)) * .Machine$double.eps
+  inv_values <- ifelse(e$values > tol, 1 / e$values, 0)
+  e$vectors %*% (inv_values * t(e$vectors))
+}
+
+#' Left square root of a symmetric positive semi-definite matrix
+#'
+#' Returns `L` such that `L %*% t(L)` equals `v`: the transposed Cholesky
+#' factor when `v` is positive definite, otherwise a square root based on the
+#' eigendecomposition (negative eigenvalues from rounding are set to zero).
+#'
+#' @param v symmetric positive semi-definite matrix
+#' @returns numeric matrix
+#' @keywords internal
+mice_sqrt_psd <- function(v) {
+  ch <- tryCatch(chol(v), error = function(e) NULL)
+  if (!is.null(ch)) return(t(ch))
+  e <- eigen(v, symmetric = TRUE)
+  e$vectors %*% diag(sqrt(pmax(e$values, 0)), nrow = length(e$values))
+}
+
+#' Identify (near-)collinear predictors in a design matrix
+#'
+#' Uses a pivoted QR decomposition of the column-scaled design matrix. Columns
+#' that are (near-)linear combinations of the others are reported, together
+#' with the columns they depend on.
+#'
+#' @param X design matrix with column names
+#' @param tol tolerance for the QR rank determination
+#' @returns character vector with names of the collinear predictors (without
+#'   the intercept), possibly empty
+#' @keywords internal
+mice_collinear_predictors <- function(X, tol = 1e-7) {
+  nms <- colnames(X)
+  if (is.null(nms)) nms <- paste0("X", seq_len(ncol(X)))
+  rms <- sqrt(colMeans(X^2))
+  rms[!is.finite(rms) | rms == 0] <- 1
+  Xs <- sweep(X, 2, rms, "/")
+  q <- qr(Xs, tol = tol)
+  if (q$rank >= ncol(Xs)) return(character())
+  basis <- q$pivot[seq_len(q$rank)]
+  aliased <- q$pivot[-seq_len(q$rank)]
+  coefs <- qr.coef(qr(Xs[, basis, drop = FALSE]), Xs[, aliased, drop = FALSE])
+  coefs <- matrix(coefs, nrow = length(basis))
+  partners <- basis[rowSums(abs(coefs) > 1e-6, na.rm = TRUE) > 0]
+  involved <- nms[sort(unique(c(partners, aliased)))]
+  setdiff(involved, "(Intercept)")
+}
+
+#' Warn that collinear predictors required a pseudo-inverse
+#'
+#' @param var name of the variable being imputed
+#' @param collinear names of the collinear predictors
+#' @keywords internal
+mice_warn_collinear <- function(var, collinear) {
+  msg <- paste0(
+    "Predictors used to impute ",
+    if (is.null(var)) "a variable" else paste0("`", var, "`"),
+    " are (nearly) collinear",
+    if (length(collinear) > 0) {
+      paste0(": ", paste0("`", collinear, "`", collapse = ", "))
+    },
+    ". Using a pseudo-inverse for the regression draw. Consider removing ",
+    "redundant covariates, or declaring integer-coded categorical covariates ",
+    "in `cat_covs`."
+  )
+  warning(warningCondition(
+    msg,
+    class = c("irxforge_mice_collinear_warning", "irxforge_mice_warning")
+  ))
+}
+
+#' Evaluate an expression, emitting each distinct irxforge MICE warning once
+#'
+#' The Gibbs sampler draws each variable's regression many times (per
+#' iteration, replicate and time-varying transition step), so the same warning
+#' would otherwise be repeated many times.
+#'
+#' @param expr expression to evaluate
+#' @returns value of `expr`
+#' @keywords internal
+dedupe_mice_warnings <- function(expr) {
+  seen <- list()
+  out <- withCallingHandlers(
+    expr,
+    irxforge_mice_warning = function(w) {
+      msg <- conditionMessage(w)
+      if (!msg %in% names(seen)) seen[[msg]] <<- w
+      invokeRestart("muffleWarning")
+    }
+  )
+  for (w in seen) {
+    w$call <- NULL
+    warning(w)
+  }
+  out
+}
+
+#' Warn about integer-coded covariates that will be treated as continuous
+#'
+#' Numeric covariates with only whole-number values and 2 or 3 distinct
+#' values (e.g. `SEX = 0/1`, `FED = 0/1`) are most likely categorical codes.
+#' Covariates with fewer than 10 non-missing values are not checked. If
+#' they are not listed in `cat_covs`, they are imputed as continuous, which
+#' gives non-integer values and can make the imputation models (nearly)
+#' singular.
+#'
+#' @param data data.frame with covariates
+#' @param covs names of the covariates to check
+#' @param cat_covs names of the covariates declared categorical
+#' @returns names of the suspicious covariates, invisibly
+#' @keywords internal
+warn_integer_coded_covariates <- function(data, covs, cat_covs = NULL) {
+  covs <- setdiff(intersect(covs, names(data)), cat_covs)
+  suspicious <- covs[vapply(covs, function(cov) {
+    x <- data[[cov]]
+    if (!is.numeric(x)) return(FALSE)
+    x <- x[!is.na(x)]
+    ux <- unique(x)
+    # with very few values, a small number of distinct values is uninformative
+    length(x) >= 10 && length(ux) >= 2 && length(ux) <= 3 &&
+      all(ux == round(ux))
+  }, logical(1))]
+  if (length(suspicious) > 0) {
+    warning(warningCondition(
+      paste0(
+        "Integer covariate(s) with at most 3 distinct values are not in ",
+        "`cat_covs` and will be imputed as continuous: ",
+        paste0("`", suspicious, "`", collapse = ", "),
+        ". If these are categorical codes (e.g. `SEX = 0/1`), add them to ",
+        "`cat_covs`."
+      ),
+      class = c("irxforge_integer_coded_warning", "irxforge_mice_warning")
+    ))
+  }
+  invisible(suspicious)
 }
 
 #' Draw parameters of a Bayesian logistic regression model

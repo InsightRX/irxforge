@@ -4,7 +4,7 @@
 \alias{mice_impute_variable}
 \title{Draw imputations for a single variable}
 \usage{
-mice_impute_variable(y, ry, X, method, donors = 5L, ridge = 1e-05)
+mice_impute_variable(y, ry, X, method, donors = 5L, ridge = 1e-05, var = NULL)
 }
 \arguments{
 \item{y}{vector with current (completed) values of the variable}
@@ -22,6 +22,8 @@ for factors with more than 2 levels.}
 
 \item{ridge}{ridge penalty used in the linear regression draws, to stabilize
 the estimation in case of collinear predictors.}
+
+\item{var}{name of the variable being imputed, used in messages.}
 }
 \value{
 vector of imputed values for \code{y[!ry]}

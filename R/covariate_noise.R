@@ -71,15 +71,21 @@ sample_tv_baseline <- function(
     }
     return(out)
   }
-  sample_covariates_mice(
-    data = baseline_data,
-    cat_covs = cat_covs,
-    conditional = conditional,
-    n_subjects = n_subjects,
-    cont_method = cont_method,
-    replicates = 1,
-    seed = NULL,
-    ...
+  # the caller has already checked the full (longitudinal) data for
+  # integer-coded covariates missing from `cat_covs`, so do not repeat that
+  # check on the baseline rows only
+  withCallingHandlers(
+    sample_covariates_mice(
+      data = baseline_data,
+      cat_covs = cat_covs,
+      conditional = conditional,
+      n_subjects = n_subjects,
+      cont_method = cont_method,
+      replicates = 1,
+      seed = NULL,
+      ...
+    ),
+    irxforge_integer_coded_warning = function(w) invokeRestart("muffleWarning")
   )
 }
 

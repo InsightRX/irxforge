@@ -172,3 +172,20 @@ test_that("conditional without matching subjects gives informative error", {
     "No subjects"
   )
 })
+
+test_that("warns about integer-coded covariates not declared in cat_covs", {
+  set.seed(1)
+  dat <- data.frame(
+    WT = stats::rnorm(40, 70, 10),
+    SEX = rep(c(0, 1), 20),
+    FED = rep(c(0, 1, 1, 0), 10)
+  )
+  expect_warning(
+    sample_covariates_mice(dat, n_subjects = 5, seed = 1),
+    "`SEX`, `FED`",
+    class = "irxforge_integer_coded_warning"
+  )
+  expect_no_warning(
+    sample_covariates_mice(dat, cat_covs = c("SEX", "FED"), n_subjects = 5, seed = 1)
+  )
+})
