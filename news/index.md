@@ -3,6 +3,13 @@
 ## irxforge (development version)
 
 - [`anonymize_dataset()`](https://insightrx.github.io/irxforge/reference/anonymize_dataset.md):
+  the guard against time-reset records now tests what the time-varying
+  samplers actually need — a non-decreasing `TIME` within every subject
+  — instead of rejecting any dataset containing `EVID` 3 or 4. Reset
+  records whose time scale keeps increasing are now accepted, and when
+  the check fails the error names the offending subjects (#21).
+
+- [`anonymize_dataset()`](https://insightrx.github.io/irxforge/reference/anonymize_dataset.md):
   `covariates` may now be `character(0)` for datasets without covariate
   columns. Covariate sampling is skipped; subjects are still renumbered
   `1:n` (with each observed design cloned onto a new subject in random

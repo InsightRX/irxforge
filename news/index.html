@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9037</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9038</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -37,7 +37,8 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="irxforge-development-version">irxforge (development version)<a class="anchor" aria-label="anchor" href="#irxforge-development-version"></a></h2>
-<ul><li><p><code><a href="../reference/anonymize_dataset.html">anonymize_dataset()</a></code>: <code>covariates</code> may now be <code>character(0)</code> for datasets without covariate columns. Covariate sampling is skipped; subjects are still renumbered <code>1:n</code> (with each observed design cloned onto a new subject in random order) and <code>DV</code> is still replaced by simulated concentrations (#20).</p></li>
+<ul><li><p><code><a href="../reference/anonymize_dataset.html">anonymize_dataset()</a></code>: the guard against time-reset records now tests what the time-varying samplers actually need — a non-decreasing <code>TIME</code> within every subject — instead of rejecting any dataset containing <code>EVID</code> 3 or 4. Reset records whose time scale keeps increasing are now accepted, and when the check fails the error names the offending subjects (#21).</p></li>
+<li><p><code><a href="../reference/anonymize_dataset.html">anonymize_dataset()</a></code>: <code>covariates</code> may now be <code>character(0)</code> for datasets without covariate columns. Covariate sampling is skipped; subjects are still renumbered <code>1:n</code> (with each observed design cloned onto a new subject in random order) and <code>DV</code> is still replaced by simulated concentrations (#20).</p></li>
 <li><p><code><a href="../reference/check_nm_dataset.html">check_nm_dataset()</a></code>: fixed a crash when <code>TIME</code> is non-numeric (e.g. date/clock strings) and <code>ADDL</code>/<code>II</code> are present — the overlapping-dose check now also guards on <code>is.numeric(TIME)</code> so the whole check no longer aborts before returning results.</p></li>
 <li><p><code><a href="../reference/check_nm_dataset.html">check_nm_dataset()</a></code>: the <code>unique_records</code> check now skips (returns <code>NA</code>) instead of emitting a false <code>FAIL</code> when the subject <code>ID</code> does not resolve or <code>TIME</code> is not numeric (a character clock-of-day TIME, or a key collapsed across subjects, produced spurious duplicates).</p></li>
 <li><p><code><a href="../reference/check_nm_dataset.html">check_nm_dataset()</a></code>: failing <code>char_columns</code>, <code>reserved_names</code>, and <code>covariate_missing</code> checks now name the offending column(s) in their <code>description</code>.</p></li>
