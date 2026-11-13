@@ -87,3 +87,13 @@ test_that("different seeds produce different output", {
   out2 <- sample_covariates_bootstrap(dat, n_subjects = 20, seed = 2)
   expect_false(identical(out1, out2))
 })
+
+test_that("seed and na.rm keep their positional order", {
+  dat <- data.frame(AGE = c(20, 30, NA, 50), WT = c(55, 70, 65, 80))
+  expect_equal(
+    sample_covariates_bootstrap(dat, 10, NULL, 42),
+    sample_covariates_bootstrap(dat, n_subjects = 10, seed = 42)
+  )
+  out <- sample_covariates_bootstrap(dat, 50, NULL, 1, FALSE)
+  expect_true(anyNA(out$AGE))
+})

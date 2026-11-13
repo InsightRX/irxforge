@@ -1,0 +1,44 @@
+# Two-compartment IV infusion PK model.
+#
+# Allometric exponents (fixed, not estimated):
+#   CL, Q: exponent = 0  → no FFM effect (only CRCL drives CL)
+#   V1, V2: exponent = 1 → linear FFM scaling
+#
+# CRCL: Cockcroft-Gault with FFM, pre-computed as CRCLF column
+#   CRCLF = (140-AGE) * FFM * (0.85^SEX) / (72*CREAT)
+#
+# Error: combined proportional + additive — sigmas are SDs, matching
+# NONMEM's `W = SQRT(IPRED^2 * PROP^2 + ADD^2)` parameterisation.
+#
+[parameters]
+  theta TVCL(5.063,    0.1,  150.0)
+  theta TVV1(64.34,   1.0, 2000.0)
+  theta TVQ(6.24,     0.1,   50.0)
+  theta TVV2(59.019,  1.0, 2500.0)
+  theta THETA_CRCL(0.8509, 0.01, 3.0)   # CRCL effect on CL
+
+  block_omega (ETA_CL, ETA_V1, ETA_V2) = [
+    0.0473154,
+    0.00271032, 0.0322236,
+    0.0132618, 0.138593, 0.634656
+  ]
+  
+  sigma PROP_ERR ~ 0.1334 (sd)  # SD of proportional component
+  sigma ADD_ERR  ~ 0.001 (sd)   # SD of additive component (mg/L)
+
+[individual_parameters]
+  CL = TVCL * (CRCLf / 100.0)^THETA_CRCL * exp(ETA_CL)
+  V1 = TVV1 * (FFM / 70.0) * exp(ETA_V1)
+  Q  = TVQ
+  V2 = TVV2 * (FFM / 70.0) * exp(ETA_V2)
+
+[structural_model]
+  pk two_cpt_iv(cl=CL, v1=V1, q=Q, v2=V2)
+
+[error_model]
+  DV ~ combined(PROP_ERR, ADD_ERR)
+
+[fit_options]
+  method     = focei
+  maxiter    = 500
+  covariance = true

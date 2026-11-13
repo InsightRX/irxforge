@@ -17,6 +17,11 @@ Useful links:
 \author{
 \strong{Maintainer}: Ron Keizer \email{ron@insight-rx.com}
 
+Authors:
+\itemize{
+  \item Ron Keizer \email{ron@insight-rx.com}
+}
+
 Other contributors:
 \itemize{
   \item Michael McCarthy \email{michael.mccarthy@insight-rx.com} [contributor]
