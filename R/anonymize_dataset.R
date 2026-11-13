@@ -847,13 +847,43 @@ apply_simulated_concentrations <- function(data, sim) {
   if (!"DV_SIM" %in% names(sim)) {
     stop("FeRx simulation output must contain a `DV_SIM` column.", call. = FALSE)
   }
-  obs_idx <- which(data$EVID == 0)
-  if (length(obs_idx) != nrow(sim)) {
-    stop(
-      "FeRx simulation row count does not match the number of observation records.",
-      call. = FALSE
-    )
+  # FeRx only simulates records that carry an observation: `EVID == 0` rows
+  # flagged `MDV == 1` (e.g. scheduled samples that were never taken) get no
+  # simulated row. Count observations the same way, and give those records a
+  # missing `DV` so they keep `MDV = 1` downstream.
+  evid_obs <- !is.na(data$EVID) & data$EVID == 0
+  if ("MDV" %in% names(data)) {
+    mdv_flagged <- evid_obs & !is.na(data$MDV) & data$MDV != 0
+  } else {
+    mdv_flagged <- rep(FALSE, nrow(data))
   }
+  obs_idx <- which(evid_obs & !mdv_flagged)
+  if (length(obs_idx) != nrow(sim)) {
+    n_evid_obs <- sum(evid_obs)
+    if (n_evid_obs == nrow(sim)) {
+      # FeRx returned a row for every `EVID == 0` record, including the
+      # `MDV == 1` ones; use them all.
+      obs_idx <- which(evid_obs)
+      mdv_flagged <- rep(FALSE, nrow(data))
+    } else {
+      msg <- paste0(
+        "FeRx returned ", nrow(sim), " rows for ", n_evid_obs,
+        " `EVID == 0` records"
+      )
+      n_flagged <- sum(mdv_flagged)
+      if (n_flagged > 0) {
+        msg <- paste0(
+          msg, ". ", n_flagged, " of them are flagged `MDV == 1` and carry no ",
+          "observation, leaving ", length(obs_idx), " observation records; ",
+          "the remaining mismatch could not be explained."
+        )
+      } else {
+        msg <- paste0(msg, "; expected one simulated row per observation record.")
+      }
+      stop(msg, call. = FALSE)
+    }
+  }
+  data[["DV"]][mdv_flagged] <- NA
   # Match simulated concentrations back onto observation rows by ID and TIME
   # (and CMT when available) rather than by position: FeRx is not guaranteed to
   # return rows in the input order, so a positional copy can silently scramble
