@@ -64,6 +64,10 @@ test_that("anonymize_dataset creates anonymized NONMEM-style data", {
   expect_false("PATIENT_NAME" %in% names(out))
   expect_equal(out$DV, c(0, 7, 8, 0, 3, 4))
   expect_equal(out$WT, c(75, 76, 76, 65, 65, 66))
+  expect_equal(
+    attr(out, "design_map"),
+    data.frame(ID = c(1, 2), DESIGN_ID = c("B", "A"))
+  )
 })
 
 test_that("n_candidates selects the covariate sample closest to observed data", {
@@ -666,6 +670,15 @@ test_that("anonymize_dataset accepts an empty covariate set", {
     paste(d$TIME, d$AMT, collapse = ";")
   }, character(1))
   expect_setequal(unname(designs), unname(orig))
+  # the design map relates each anonymized subject to its source design
+  design_map <- attr(out, "design_map")
+  expect_named(design_map, c("ID", "DESIGN_ID"))
+  expect_setequal(design_map$ID, 1:3)
+  expect_setequal(design_map$DESIGN_ID, c(11, 22, 33))
+  expect_equal(
+    unname(designs[as.character(design_map$ID)]),
+    unname(orig[as.character(design_map$DESIGN_ID)])
+  )
   expect_equal(out$DV[out$EVID == 0], out$TIME[out$EVID == 0] * 10)
   expect_equal(out$DV[out$EVID == 1], rep(0, 3))
   # reproducible with a seed
@@ -746,7 +759,11 @@ test_that("design_cols are cloned verbatim from the matched design", {
   expect_equal(out$OCC, c(1, 2, 2, 1, 1, 2))
   # design columns are not rounded by `sigdig`
   expect_equal(out$TLST, c(0, 0, 0.12345678, 0, 0, 0))
-  expect_equal(out$DV, c(0, 7, 8, 0, 3, 4))
+  expect_equal(out$DV, c(0, 7, 8, 0, 3, 4))  # the design map still records which source design each subject cloned
+  expect_equal(
+    attr(out, "design_map"),
+    data.frame(ID = c(1, 2), DESIGN_ID = c("B", "A"))
+  )
 })
 
 test_that("design_cols survive BLQ removal on the remaining records", {
@@ -912,4 +929,44 @@ test_that("anonymize_dataset accepts reset records with a monotone time axis", {
   out <- anonymize_dataset(dat, covariates = "WT", model_file = model, seed = 1)
   expect_true(any(out$EVID %in% c(3, 4)))
   expect_equal(nrow(out), nrow(dat))
+})
+
+test_that("cloned designs are time-ordered and exposed via the design map", {
+  # subject 7 has tied times recorded out of EVID order and a missing time;
+  # the clone keeps tied records in source order and puts NA times last
+  dat <- data.frame(
+    ID = c(7, 7, 7, 7, 9, 9, 9),
+    TIME = c(0, NA, 0, 2, 0, 1, 3),
+    EVID = c(0, 2, 1, 0, 1, 0, 0),
+    AMT = c(0, 0, 100, 0, 50, 0, 0),
+    DV = c(0, 0, 0, 5, 0, 4, 2),
+    WT = c(70, 70, 70, 71, 60, 60, 61)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) {
+      data.frame(
+        ID = c(1, 1, 1, 2, 2, 2, 2),
+        .design_id = c("9", "9", "9", "7", "7", "7", "7"),
+        TIME = c(0, 1, 3, 0, 0, 2, NA),
+        WT = c(65, 65, 66, 72, 72, 73, 73)
+      )
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      obs <- data[data$EVID == 0, ]
+      data.frame(ID = obs$ID, TIME = obs$TIME, DV_SIM = seq_len(nrow(obs)))
+    }
+  )
+
+  out <- anonymize_dataset(dat, covariates = "WT", model_file = model, seed = 1)
+
+  expect_equal(
+    attr(out, "design_map"),
+    data.frame(ID = c(1, 2), DESIGN_ID = c(9, 7))
+  )
+  subj2 <- out[out$ID == 2, ]
+  expect_equal(subj2$TIME, c(0, 0, 2, NA))
+  expect_equal(subj2$EVID, c(0, 1, 0, 2))
 })

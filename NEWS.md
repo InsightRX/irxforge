@@ -5,6 +5,10 @@
   that are cloned verbatim from the matched source design instead of being dropped
   or resampled. They are present in the data handed to `ferx_simulate()`, so models
   that reference them can be simulated, and are kept in the returned dataset.
+* `sample_covariates_mice_timevarying()`: fixed a crash ("Can't combine `..1$.SEX_lag`
+  <integer> and `..2$.SEX_lag` <factor>") when categorical covariates are stored as
+  integer codes and at least one covariate is time-varying. Observed and simulated
+  rows are now coerced to factors with a shared level set before stacking (#18).
 * `anonymize_dataset()`: the guard against time-reset records now tests what the
   time-varying samplers actually need — a non-decreasing `TIME` within every subject —
   instead of rejecting any dataset containing `EVID` 3 or 4. Reset records whose time

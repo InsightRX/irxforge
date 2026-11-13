@@ -47,14 +47,18 @@ test_that("conditional argument filters data before sampling", {
   )
   cndl <- list(WT = c(50, 70))
   n <- 1000
+  # seeded: expected outside fractions (~0.55 vs ~0.16) leave only a thin
+  # margin over the 3x threshold, so unseeded draws fail intermittently
   out_uncond <- sample_covariates_mvtnorm(
     data = dat,
-    n_subjects = n
+    n_subjects = n,
+    seed = 1
   )
   out_cond <- sample_covariates_mvtnorm(
     data = dat,
     conditional = cndl,
-    n_subjects = n
+    n_subjects = n,
+    seed = 2
   )
   outside_uncond <- sum(out_uncond$WT < 50 | out_uncond$WT > 70)/n
   outside_cond <- sum(out_cond$WT < 50 | out_cond$WT > 70)/n

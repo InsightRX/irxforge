@@ -641,3 +641,56 @@ test_that("propensity matching ignores single-level categorical covariates", {
   expect_true(all(idx %in% 1:3))
   expect_false(anyDuplicated(idx) > 0)
 })
+
+test_that("integer-coded categorical covariates survive multiple transition steps", {
+  # regression test for #18: from the second transition step on, the simulated
+  # rows carry factors while the observed transitions hold integer codes, which
+  # previously made `bind_rows()` fail in `run_mice_simulation()`.
+  set.seed(2)
+  dat <- do.call(rbind, lapply(1:20, function(i) {
+    data.frame(
+      ID = i,
+      TIME = 0:3,
+      SEX = sample(0:1, 1),
+      WT = 70 + i + cumsum(stats::rnorm(4)),
+      STATE = sample(1:2, 4, replace = TRUE)
+    )
+  }))
+  expect_no_error(
+    out <- sample_covariates_mice_timevarying(
+      dat,
+      static_covs = "SEX",
+      time_varying_covs = c("WT", "STATE"),
+      cat_covs = c("SEX", "STATE"),
+      n_subjects = 10,
+      seed = 1
+    )
+  )
+  expect_true(all(as.character(out$SEX) %in% c("0", "1")))
+  expect_true(all(as.character(out$STATE) %in% c("1", "2")))
+  expect_false(anyNA(out$STATE))
+  expect_false(anyNA(out$WT))
+})
+
+test_that("run_mice_simulation combines integer and factor categorical columns", {
+  original <- data.frame(
+    SEX = c(0L, 1L, 0L, 1L, 0L, 1L),
+    WT = c(60, 70, 65, 75, 62, 72)
+  )
+  simulated <- data.frame(
+    SEX = factor(c("1", "0"), levels = c("0", "1")),
+    WT = c(NA_real_, NA_real_)
+  )
+  out <- run_mice_simulation(
+    original = original,
+    simulated = simulated,
+    cat_covs = "SEX",
+    cont_covs = "WT",
+    cont_method = "pmm",
+    predicted_vars = "WT"
+  )
+  expect_equal(nrow(out), 2)
+  expect_s3_class(out$SEX, "factor")
+  expect_equal(as.character(out$SEX), c("1", "0"))
+  expect_false(anyNA(out$WT))
+})

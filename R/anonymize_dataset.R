@@ -76,7 +76,21 @@
 #' @param ... additional arguments passed to
 #'   [sample_covariates_mice_timevarying()].
 #'
-#' @returns anonymized NONMEM-style data.frame.
+#' @returns anonymized NONMEM-style data.frame, with one block of records per
+#'   anonymized subject (`ID` `1:n`). Each block is a clone of one observed
+#'   subject's dosing/observation design, returned **ordered by time within
+#'   subject** (a stable sort on `TIME`, so records sharing a time keep their
+#'   source order and records with a missing time are placed last). The result
+#'   carries these attributes:
+#'   * `"design_map"`: a `data.frame` with one row per anonymized subject and
+#'     columns `ID` (the anonymized subject ID) and `DESIGN_ID` (the ID of the
+#'     observed subject in `data` whose design was cloned, in its original
+#'     type). Use it to relate anonymized subjects back to their source design
+#'     without reconstructing it from the event records. Note that this mapping
+#'     links the anonymized dataset to the source subjects, so it should not be
+#'     shared alongside the anonymized data.
+#'   * `"similarity_score"`: the selected candidate's score when
+#'     `n_candidates > 1`, otherwise `NULL`.
 #'
 #' @export
 anonymize_dataset <- function(
@@ -201,6 +215,7 @@ anonymize_dataset <- function(
     blq_method = blq_method
   )
   result <- recompute_anonymized_mdv(result)
+  attr(result, "design_map") <- attr(selected$data, "design_map")
   attr(result, "similarity_score") <- selected$score
   result
 }
@@ -800,6 +815,7 @@ build_anonymized_simulation_input <- function(data, sampled_covs, covariates, di
   data_split <- split(data, as.character(data[[id_var]]))
 
   out <- vector("list", length(sim_ids))
+  design_map <- vector("list", length(sim_ids))
   skipped <- character(0)
   i <- 1L
   for (sim_id in sim_ids) {
@@ -810,6 +826,9 @@ build_anonymized_simulation_input <- function(data, sampled_covs, covariates, di
       skipped <- c(skipped, as.character(sim_id))
       next
     }
+    # Designs are cloned in time order (stable, so ties keep source order and
+    # missing times go last); this matches the time order of the sampled
+    # covariates and is documented in `?anonymize_dataset`.
     design_rows <- design_rows[order(design_rows[[time_var]]), , drop = FALSE]
     aligned <- nrow(design_rows) == nrow(cov_rows) &&
       isTRUE(all.equal(
@@ -835,6 +854,11 @@ build_anonymized_simulation_input <- function(data, sampled_covs, covariates, di
       events <- cbind(events, cov_rows[, covariates, drop = FALSE])
     }
     out[[i]] <- events
+    design_map[[i]] <- data.frame(
+      ID = sim_id,
+      DESIGN_ID = design_rows[[id_var]][[1]],
+      stringsAsFactors = FALSE
+    )
     i <- i + 1L
   }
   if (length(skipped) > 0) {
@@ -850,7 +874,14 @@ build_anonymized_simulation_input <- function(data, sampled_covs, covariates, di
     "ID", "TIME", "EVID", "AMT", "RATE", "DV", "CMT", "MDV", "ADDL", "II", "SS",
     design_cols, covariates
   ))
-  out[, intersect(order_cols, names(out)), drop = FALSE]
+  out <- out[, intersect(order_cols, names(out)), drop = FALSE]
+  design_map <- do.call(rbind, design_map[seq_len(i - 1L)])
+  if (is.null(design_map)) {
+    design_map <- data.frame(ID = sim_ids[0], DESIGN_ID = data[[id_var]][0])
+  }
+  rownames(design_map) <- NULL
+  attr(out, "design_map") <- design_map
+  out
 }
 
 simulate_anonymized_concentrations <- function(model_file, data, seed = NULL) {

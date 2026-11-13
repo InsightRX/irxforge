@@ -655,10 +655,25 @@ run_mice_simulation <- function(
   predicted_vars = NULL,
   ...
 ) {
-  comb <- dplyr::bind_rows(
-    as.data.frame(original),
-    as.data.frame(simulated)
-  ) |>
+  original <- as.data.frame(original)
+  simulated <- as.data.frame(simulated)
+  # Coerce categorical columns in both frames to factors with a shared level
+  # set *before* stacking: from the second transition step on, `simulated`
+  # carries factors from the previous imputation while `original` may still
+  # hold raw (e.g. integer) codes, which `bind_rows()` cannot combine.
+  for (v in intersect(cat_covs, union(names(original), names(simulated)))) {
+    lv <- union(
+      if (v %in% names(original)) levels(as.factor(original[[v]])),
+      if (v %in% names(simulated)) levels(as.factor(simulated[[v]]))
+    )
+    if (v %in% names(original)) {
+      original[[v]] <- factor(as.character(original[[v]]), levels = lv)
+    }
+    if (v %in% names(simulated)) {
+      simulated[[v]] <- factor(as.character(simulated[[v]]), levels = lv)
+    }
+  }
+  comb <- dplyr::bind_rows(original, simulated) |>
     dplyr::mutate(dplyr::across(dplyr::all_of(cat_covs), as.factor)) |>
     as.data.frame()
   rownames(comb) <- NULL
