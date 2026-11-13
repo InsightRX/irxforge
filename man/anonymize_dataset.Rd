@@ -39,7 +39,9 @@ block (whose filters refer to original records and columns) and the
 deprecated \verb{[initial_values]} block are removed; in the \verb{[data]} block,
 \code{path} is replaced by the absolute path of the simulation dataset, and a
 column map is kept only when it renames a sampled covariate (from
-\code{covariates}) that does not collide with another column. Maps onto or from
+\code{covariates}) whose new name does not collide with a column that remains
+under its own name after all retained renames are applied (renames are
+simultaneous, so \code{HTCM = WT} with \code{WT = HT} is kept). Maps onto or from
 the structural columns (e.g. \code{AMT = DOSE}, \code{DV = lndv}) are dropped,
 because the anonymized dataset already uses the canonical names \code{ID},
 \code{TIME}, \code{EVID}, \code{AMT}, \code{DV} and \code{RATE} (plus \code{CMT}, \code{MDV}, \code{ADDL}, \code{II}

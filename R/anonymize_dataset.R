@@ -18,7 +18,9 @@
 #'   deprecated `[initial_values]` block are removed; in the `[data]` block,
 #'   `path` is replaced by the absolute path of the simulation dataset, and a
 #'   column map is kept only when it renames a sampled covariate (from
-#'   `covariates`) that does not collide with another column. Maps onto or from
+#'   `covariates`) whose new name does not collide with a column that remains
+#'   under its own name after all retained renames are applied (renames are
+#'   simultaneous, so `HTCM = WT` with `WT = HT` is kept). Maps onto or from
 #'   the structural columns (e.g. `AMT = DOSE`, `DV = lndv`) are dropped,
 #'   because the anonymized dataset already uses the canonical names `ID`,
 #'   `TIME`, `EVID`, `AMT`, `DV` and `RATE` (plus `CMT`, `MDV`, `ADDL`, `II`
@@ -888,7 +890,8 @@ anonymized_structural_columns <- function() {
 #'   simulation dataset (so it no longer depends on where the model file
 #'   lives), and a column map `<target> = <source>` is kept only when it
 #'   renames a sampled covariate that is present in the anonymized frame and
-#'   its target does not collide with another column. Maps onto (or from) the
+#'   its target does not collide with a column left in place by the retained
+#'   renames (see `retain_data_maps()`). Maps onto (or from) the
 #'   structural columns are dropped, because the anonymized frame already uses
 #'   the canonical names (`ID`, `TIME`, `EVID`, `AMT`, `DV`, ...).
 #'
@@ -929,6 +932,9 @@ prepare_simulation_model_file <- function(
     covariate_cols <- setdiff(columns, anonymized_structural_columns())
     path_written <- FALSE
     abs_data_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+    map_idx <- integer(0)
+    map_target <- character(0)
+    map_source <- character(0)
     for (i in data_body) {
       content <- trimws(sub("#.*$", "", lines[i]))
       if (!nzchar(content) || !grepl("=", content, fixed = TRUE)) next
@@ -945,11 +951,15 @@ prepare_simulation_model_file <- function(
         }
         next
       }
-      source_ok <- toupper(value) %in% toupper(covariate_cols)
-      target_free <- toupper(key) == toupper(value) ||
-        !toupper(key) %in% toupper(columns)
-      if (!source_ok || !target_free) keep[i] <- FALSE
+      if (toupper(value) %in% toupper(covariate_cols)) {
+        map_idx <- c(map_idx, i)
+        map_target <- c(map_target, toupper(key))
+        map_source <- c(map_source, toupper(value))
+      } else {
+        keep[i] <- FALSE
+      }
     }
+    keep[map_idx[!retain_data_maps(map_target, map_source, toupper(columns))]] <- FALSE
     if (!path_written) {
       # A `[data]` block without `path` fails to parse; add the simulation path
       # right after the block header.
@@ -965,6 +975,34 @@ prepare_simulation_model_file <- function(
 
   writeLines(lines[keep], path)
   invisible(path)
+}
+
+#' Decide which `[data]` column renames can be applied together
+#'
+#' FeRx resolves all `[data]` renames against the original headers at once, so
+#' a rename may target a column that another retained rename moves aside (e.g.
+#' `HTCM = WT` together with `WT = HT`). A rename is retained when its target
+#' is not mapped by an earlier retained rename and does not collide with a
+#' column that survives under its own name, i.e. one that no retained rename
+#' moves away. Dropping a rename puts its source column back under its own
+#' name, which can create new collisions, so this iterates to a fixed point.
+#'
+#' @param target,source upper-cased targets and sources of the candidate
+#'   renames (sources are already known to be present in the data).
+#' @param columns upper-cased column names of the simulation dataset.
+#'
+#' @returns logical vector, `TRUE` for renames to keep.
+#'
+#' @noRd
+retain_data_maps <- function(target, source, columns) {
+  keep <- !duplicated(target) & !duplicated(source)
+  repeat {
+    surviving <- setdiff(columns, source[keep & target != source])
+    collides <- keep & target != source & target %in% surviving
+    if (!any(collides)) break
+    keep <- keep & !collides
+  }
+  keep
 }
 
 apply_simulated_concentrations <- function(data, sim) {

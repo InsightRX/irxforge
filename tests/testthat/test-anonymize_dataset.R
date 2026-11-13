@@ -894,3 +894,42 @@ test_that("simulate_anonymized_concentrations passes a simulation-ready model co
   # temporary files are cleaned up
   expect_false(file.exists(captured$model))
 })
+
+test_that("prepare_simulation_model_file keeps simultaneous/swapped covariate renames", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[data]", "  path = orig.csv", "  HTCM = WT", "  WT = HT"), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV", "HT", "WT")
+  )
+  expect_true(all(c("  HTCM = WT", "  WT = HT") %in% readLines(out)))
+
+  # a full swap is kept as well
+  writeLines(c("[data]", "  path = orig.csv", "  WT = HT", "  HT = WT"), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV", "HT", "WT")
+  )
+  expect_true(all(c("  WT = HT", "  HT = WT") %in% readLines(out)))
+})
+
+test_that("retain_data_maps drops renames that collide after the others are applied", {
+  # WT = HT collides once HTCM = WT is dropped (its source is absent: dropped
+  # earlier), so only the unrelated rename survives.
+  expect_equal(
+    retain_data_maps(c("WT", "BMI2"), c("HT", "BMI"), c("ID", "HT", "WT", "BMI")),
+    c(FALSE, TRUE)
+  )
+  # dropping one rename un-vacates its source and cascades
+  expect_equal(
+    retain_data_maps(c("A", "B"), c("B", "C"), c("A", "B", "C")),
+    c(FALSE, FALSE)
+  )
+  expect_equal(
+    retain_data_maps(c("A", "B", "Z"), c("B", "C", "A"), c("A", "B", "C")),
+    c(TRUE, TRUE, TRUE)
+  )
+  # duplicate targets: first one wins
+  expect_equal(
+    retain_data_maps(c("X", "X"), c("A", "B"), c("A", "B")),
+    c(TRUE, FALSE)
+  )
+})
