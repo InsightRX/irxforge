@@ -35,6 +35,10 @@ anonymize_dataset(
 - covariates:
 
   character vector of covariates to include in the anonymized dataset.
+  May be `character(0)` for datasets without covariate columns:
+  covariate sampling is then skipped, and each observed subject's
+  dosing/observation design is cloned (in random order) onto a
+  renumbered subject `1:n` before the concentrations are simulated.
 
 - model_file:
 

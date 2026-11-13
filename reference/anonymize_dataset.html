@@ -11,7 +11,7 @@ observed concentrations with FeRx-simulated values."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9036</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9037</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -77,7 +77,10 @@ observed concentrations with FeRx-simulated values.</p>
 
 <dt id="arg-covariates">covariates<a class="anchor" aria-label="anchor" href="#arg-covariates"></a></dt>
 <dd><p>character vector of covariates to include in the
-anonymized dataset.</p></dd>
+anonymized dataset. May be <code>character(0)</code> for datasets without covariate
+columns: covariate sampling is then skipped, and each observed subject's
+dosing/observation design is cloned (in random order) onto a renumbered
+subject <code>1:n</code> before the concentrations are simulated.</p></dd>
 
 
 <dt id="arg-model-file">model_file<a class="anchor" aria-label="anchor" href="#arg-model-file"></a></dt>
