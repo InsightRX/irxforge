@@ -135,17 +135,14 @@ anonymize_dataset <- function(
     loq = loq,
     design_cols = design_cols
   )
-  if (any(data[[dictionary$EVID]] %in% c(3, 4))) {
-    stop(
-      "Datasets with time-reset records (EVID 3 or 4) are not supported by ",
-      "`anonymize_dataset()`: the time-varying covariate samplers require a ",
-      "single, monotone time axis per subject.",
-      call. = FALSE
-    )
-  }
-
   id_var <- dictionary$ID
   time_var <- dictionary$TIME
+  check_anonymize_monotone_time(
+    data = data,
+    id_var = id_var,
+    time_var = time_var,
+    evid_var = dictionary$EVID
+  )
 
   if (!is.null(cat_covs) && !all(cat_covs %in% covariates)) {
     stop("`cat_covs` must be a subset of `covariates`.", call. = FALSE)
@@ -726,6 +723,54 @@ validate_anonymize_inputs <- function(data, covariates, model_file, dictionary, 
   if (!is.null(loq) && (!is.numeric(loq) || length(loq) != 1 || is.na(loq))) {
     stop("`loq` must be a single numeric value.", call. = FALSE)
   }
+}
+
+#' Check that time is non-decreasing within every subject
+#'
+#' The time-varying covariate samplers require a single, monotone time axis per
+#' subject. Reset records (`EVID` 3 or 4) are allowed as long as the time scale
+#' does not restart: only datasets whose `TIME` actually decreases within a
+#' subject (in record order) are rejected, and the offending subjects are
+#' reported. Missing times are ignored.
+#'
+#' @param data NONMEM-style data.frame.
+#' @param id_var,time_var,evid_var names of the subject ID, time and EVID
+#'   columns in `data`.
+#'
+#' @returns `invisible(TRUE)`; errors when any subject's time axis decreases.
+#'
+#' @noRd
+check_anonymize_monotone_time <- function(data, id_var, time_var, evid_var) {
+  time <- data[[time_var]]
+  mono <- tapply(seq_len(nrow(data)), data[[id_var]], function(i) {
+    t <- time[i]
+    t <- t[!is.na(t)]
+    length(t) < 2 || all(diff(t) >= 0)
+  })
+  mono <- mono[!is.na(mono)]
+  bad <- names(mono)[!mono]
+  if (length(bad) == 0) return(invisible(TRUE))
+  shown <- utils::head(bad, 10)
+  more <- if (length(bad) > length(shown)) {
+    paste0(" (and ", length(bad) - length(shown), " more)")
+  } else {
+    ""
+  }
+  has_reset <- any(data[[evid_var]][data[[id_var]] %in% bad] %in% c(3, 4))
+  stop(
+    "`anonymize_dataset()` requires a single, monotone (non-decreasing) time ",
+    "axis per subject for the time-varying covariate samplers, but `",
+    time_var, "` decreases within ", length(bad), " subject(s): ",
+    paste(shown, collapse = ", "), more, ".",
+    if (has_reset) {
+      paste0(
+        " These subjects contain time-reset records (EVID 3 or 4) that ",
+        "restart the time scale; reset records are supported only when ",
+        "time keeps increasing across them."
+      )
+    },
+    call. = FALSE
+  )
 }
 
 build_anonymized_simulation_input <- function(data, sampled_covs, covariates, dictionary,
