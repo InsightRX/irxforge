@@ -58,6 +58,12 @@
 #' @param cont_method method used to impute continuous covariates, either
 #'   `pmm` (predictive mean matching, default) or `norm` (Bayesian linear
 #'   regression).
+#' @param replicates number of independent simulated datasets to sample.
+#'   Default is 1. When greater than 1, a `.replicate` column is included.
+#' @param seed integer random seed passed to [set.seed()] for reproducibility.
+#'   Default `NULL` does not set a seed.
+#' @param ... additional arguments passed to the internal MICE implementation
+#'   (e.g. `maxit`).
 #' @param min_donors minimum number of observed transitions used as donors
 #'   when imputing each time index. Transitions are pooled by their time index
 #'   (the position of the row within its subject's profile): at time index `k`
@@ -70,12 +76,6 @@
 #'   Use `Inf` to always use all observed transitions.
 #' @param progress logical; show a progress bar over the sequential time
 #'   indices. Default is `interactive()`.
-#' @param replicates number of independent simulated datasets to sample.
-#'   Default is 1. When greater than 1, a `.replicate` column is included.
-#' @param seed integer random seed passed to [set.seed()] for reproducibility.
-#'   Default `NULL` does not set a seed.
-#' @param ... additional arguments passed to the internal MICE implementation
-#'   (e.g. `maxit`).
 #'
 #' @details
 #' This function implements a first-order empirical transition sampler:
@@ -106,11 +106,11 @@ sample_covariates_mice_timevarying <- function(
   noise = NULL,
   conditional = NULL,
   cont_method = "pmm",
-  min_donors = 1000,
-  progress = interactive(),
   replicates = 1,
   seed = NULL,
-  ...
+  ...,
+  min_donors = 1000,
+  progress = interactive()
 ) {
   if (!is.null(seed)) set.seed(seed)
   measurement_pattern <- match.arg(measurement_pattern)

@@ -849,3 +849,17 @@ test_that("invalid min_donors and progress are rejected", {
     "progress"
   )
 })
+
+test_that("new arguments do not shift existing positional arguments", {
+  args <- names(formals(sample_covariates_mice_timevarying))
+  expect_equal(
+    args[seq_len(which(args == "..."))],
+    c(
+      "data", "id_var", "time_var", "time_grid", "static_covs",
+      "time_varying_covs", "cat_covs", "measurement_pattern", "design_match",
+      "design_match_covs", "design_id_var", "n_subjects", "baseline_method",
+      "noise", "conditional", "cont_method", "replicates", "seed", "..."
+    )
+  )
+  expect_equal(args[-seq_len(which(args == "..."))], c("min_donors", "progress"))
+})

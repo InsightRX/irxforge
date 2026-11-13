@@ -21,11 +21,11 @@ sample_covariates_mice_timevarying(
   noise = NULL,
   conditional = NULL,
   cont_method = "pmm",
-  min_donors = 1000,
-  progress = interactive(),
   replicates = 1,
   seed = NULL,
-  ...
+  ...,
+  min_donors = 1000,
+  progress = interactive()
 )
 }
 \arguments{
@@ -98,6 +98,15 @@ covariate sample. Sequential transitions are not constrained. See
 \code{pmm} (predictive mean matching, default) or \code{norm} (Bayesian linear
 regression).}
 
+\item{replicates}{number of independent simulated datasets to sample.
+Default is 1. When greater than 1, a \code{.replicate} column is included.}
+
+\item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
+Default \code{NULL} does not set a seed.}
+
+\item{...}{additional arguments passed to the internal MICE implementation
+(e.g. \code{maxit}).}
+
 \item{min_donors}{minimum number of observed transitions used as donors
 when imputing each time index. Transitions are pooled by their time index
 (the position of the row within its subject's profile): at time index \code{k}
@@ -111,15 +120,6 @@ Use \code{Inf} to always use all observed transitions.}
 
 \item{progress}{logical; show a progress bar over the sequential time
 indices. Default is \code{interactive()}.}
-
-\item{replicates}{number of independent simulated datasets to sample.
-Default is 1. When greater than 1, a \code{.replicate} column is included.}
-
-\item{seed}{integer random seed passed to \code{\link[=set.seed]{set.seed()}} for reproducibility.
-Default \code{NULL} does not set a seed.}
-
-\item{...}{additional arguments passed to the internal MICE implementation
-(e.g. \code{maxit}).}
 }
 \value{
 long-format data.frame with simulated subject IDs, time, static
