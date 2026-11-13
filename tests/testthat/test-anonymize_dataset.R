@@ -801,3 +801,96 @@ test_that("cloned designs are time-ordered and exposed via the design map", {
   expect_equal(subj2$TIME, c(0, 0, 2, NA))
   expect_equal(subj2$EVID, c(0, 1, 0, 2))
 })
+
+test_that("prepare_simulation_model_file adapts a fitting model to the anonymized data", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c(
+    "# fitting model",
+    "[parameters]",
+    "  theta TVCL(0.1, 0.001, 10)",
+    "",
+    "[data]",
+    "  path = ../data/original.csv  # relative to the model",
+    "  AMT = DOSE",
+    "  ODV = dv",
+    "  DV = lndv",
+    "  TIME = tafd",
+    "  WT = weight",
+    "  CRCL = crcl_raw",
+    "  SCR = WT",
+    "",
+    "[initial_values]",
+    "  CL = 0.1",
+    "",
+    "[data_selection]",
+    "  ignore = FLAG == 1",
+    "",
+    "[fit_options]",
+    "  method = foce"
+  ), model)
+  data_path <- tempfile(fileext = ".csv")
+  out <- prepare_simulation_model_file(
+    model_file = model,
+    data_path = data_path,
+    columns = c("ID", "TIME", "EVID", "AMT", "DV", "weight", "SCR")
+  )
+  lines <- readLines(out)
+
+  expect_false(any(grepl("data_selection|ignore = FLAG", lines)))
+  expect_false(any(grepl("initial_values|CL = 0.1", lines)))
+  abs_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+  expect_true(paste0("  path = \"", abs_path, "\"") %in% lines)
+  expect_false(any(grepl("original.csv", lines)))
+  # structural maps and maps from dropped columns are removed
+  expect_false(any(grepl("AMT = DOSE|ODV = dv|DV = lndv|TIME = tafd|crcl_raw", lines)))
+  # a map from a surviving covariate is kept; one colliding with a column is not
+  expect_true("  WT = weight" %in% lines)
+  expect_false("  SCR = WT" %in% lines)
+  # unrelated content is copied verbatim
+  expect_true(all(c(
+    "# fitting model", "[parameters]", "  theta TVCL(0.1, 0.001, 10)",
+    "[data]", "[fit_options]", "  method = foce"
+  ) %in% lines))
+})
+
+test_that("prepare_simulation_model_file leaves models without [data] untouched", {
+  model <- tempfile(fileext = ".ferx")
+  src <- c("[parameters]", "  theta TVCL(0.1, 0.001, 10)", "[fit_options]", "  method = foce")
+  writeLines(src, model)
+  out <- prepare_simulation_model_file(model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV"))
+  expect_equal(readLines(out), src)
+})
+
+test_that("prepare_simulation_model_file adds a path to a [data] block without one", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[data]", "  DV = CONC", "[parameters]"), model)
+  data_path <- tempfile(fileext = ".csv")
+  out <- prepare_simulation_model_file(model, data_path, c("ID", "TIME", "DV"))
+  abs_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+  expect_equal(
+    readLines(out),
+    c("[data]", paste0("  path = \"", abs_path, "\""), "[parameters]")
+  )
+})
+
+test_that("simulate_anonymized_concentrations passes a simulation-ready model copy to ferx", {
+  skip_if_not_installed("ferx")
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[data]", "  path = orig.csv", "  AMT = DOSE", "[data_selection]", "  ignore = X == 1"), model)
+  captured <- NULL
+  local_mocked_bindings(
+    ferx_simulate = function(model, data, n_sim, seed = NULL) {
+      captured <<- list(model = model, model_lines = readLines(model), data = data)
+      data.frame(ID = 1, TIME = 1, DV_SIM = 1)
+    },
+    .package = "ferx"
+  )
+  dat <- data.frame(ID = 1, TIME = c(0, 1), EVID = c(1, 0), AMT = c(100, 0), DV = 0)
+  simulate_anonymized_concentrations(model, dat, seed = 1)
+  expect_false(identical(captured$model, model))
+  expect_length(captured$model_lines, 2)
+  expect_equal(captured$model_lines[1], "[data]")
+  expect_match(captured$model_lines[2], basename(captured$data), fixed = TRUE)
+  # temporary files are cleaned up
+  expect_false(file.exists(captured$model))
+})

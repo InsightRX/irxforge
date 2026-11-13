@@ -31,7 +31,21 @@ columns: covariate sampling is then skipped, and each observed subject's
 dosing/observation design is cloned (in random order) onto a renumbered
 subject \code{1:n} before the concentrations are simulated.}
 
-\item{model_file}{path to a FeRx model file used to simulate concentrations.}
+\item{model_file}{path to a FeRx model file used to simulate concentrations.
+The file is not used verbatim: a model written to fit the original data
+usually still describes that dataset, so the simulation runs on a temporary
+copy adapted to the anonymized dataset. In that copy the \verb{[data_selection]}
+block (whose filters refer to original records and columns) and the
+deprecated \verb{[initial_values]} block are removed; in the \verb{[data]} block,
+\code{path} is replaced by the absolute path of the simulation dataset, and a
+column map is kept only when it renames a sampled covariate (from
+\code{covariates}) that does not collide with another column. Maps onto or from
+the structural columns (e.g. \code{AMT = DOSE}, \code{DV = lndv}) are dropped,
+because the anonymized dataset already uses the canonical names \code{ID},
+\code{TIME}, \code{EVID}, \code{AMT}, \code{DV} and \code{RATE} (plus \code{CMT}, \code{MDV}, \code{ADDL}, \code{II}
+and \code{SS} when present in \code{data}). Other relative file references in the
+model (e.g. a \verb{[priors]} \code{from_fit} file) are not rewritten and should be
+given as absolute paths.}
 
 \item{dictionary}{named list mapping expected NONMEM column names to columns
 in \code{data}. Supported keys are \code{ID}, \code{EVID}, \code{AMT}, \code{TIME}, \code{DV}, and

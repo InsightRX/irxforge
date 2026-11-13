@@ -11,6 +11,20 @@
 #'   dosing/observation design is cloned (in random order) onto a renumbered
 #'   subject `1:n` before the concentrations are simulated.
 #' @param model_file path to a FeRx model file used to simulate concentrations.
+#'   The file is not used verbatim: a model written to fit the original data
+#'   usually still describes that dataset, so the simulation runs on a temporary
+#'   copy adapted to the anonymized dataset. In that copy the `[data_selection]`
+#'   block (whose filters refer to original records and columns) and the
+#'   deprecated `[initial_values]` block are removed; in the `[data]` block,
+#'   `path` is replaced by the absolute path of the simulation dataset, and a
+#'   column map is kept only when it renames a sampled covariate (from
+#'   `covariates`) that does not collide with another column. Maps onto or from
+#'   the structural columns (e.g. `AMT = DOSE`, `DV = lndv`) are dropped,
+#'   because the anonymized dataset already uses the canonical names `ID`,
+#'   `TIME`, `EVID`, `AMT`, `DV` and `RATE` (plus `CMT`, `MDV`, `ADDL`, `II`
+#'   and `SS` when present in `data`). Other relative file references in the
+#'   model (e.g. a `[priors]` `from_fit` file) are not rewritten and should be
+#'   given as absolute paths.
 #' @param dictionary named list mapping expected NONMEM column names to columns
 #'   in `data`. Supported keys are `ID`, `EVID`, `AMT`, `TIME`, `DV`, and
 #'   optionally `RATE`. Defaults use the same names.
@@ -834,13 +848,123 @@ simulate_anonymized_concentrations <- function(model_file, data, seed = NULL) {
   sim_data <- data
   sim_data_path <- tempfile(fileext = ".csv")
   utils::write.csv(sim_data, sim_data_path, row.names = FALSE, na = ".")
+  sim_model_path <- prepare_simulation_model_file(
+    model_file = model_file,
+    data_path = sim_data_path,
+    columns = names(sim_data)
+  )
+  on.exit(unlink(c(sim_data_path, sim_model_path)), add = TRUE)
   sim_args <- list(
-    model = model_file,
+    model = sim_model_path,
     data = sim_data_path,
     n_sim = 1L
   )
   if (!is.null(seed)) sim_args$seed <- as.integer(seed)
   do.call(ferx::ferx_simulate, sim_args)
+}
+
+#' Structural columns of the anonymized simulation frame
+#'
+#' The anonymized frame built by [build_anonymized_simulation_input()] carries
+#' these columns under their canonical NONMEM names; every other column is a
+#' sampled covariate under its name in the source data.
+#'
+#' @noRd
+anonymized_structural_columns <- function() {
+  c("ID", "TIME", "EVID", "AMT", "RATE", "DV", "CMT", "MDV", "ADDL", "II", "SS", "CENS")
+}
+
+#' Write a simulation-ready copy of a FeRx model file
+#'
+#' A model file written to *fit* the original dataset usually still describes
+#' that dataset, which the anonymized simulation frame no longer matches. This
+#' writes a temporary copy of `model_file` adapted to the anonymized frame:
+#'
+#' * the `[data_selection]` block is removed: its filters refer to the original
+#'   records and columns, most of which de-identification dropped;
+#' * the deprecated `[initial_values]` block (no longer read by FeRx) is
+#'   removed;
+#' * in the `[data]` block, `path` is rewritten to the absolute path of the
+#'   simulation dataset (so it no longer depends on where the model file
+#'   lives), and a column map `<target> = <source>` is kept only when it
+#'   renames a sampled covariate that is present in the anonymized frame and
+#'   its target does not collide with another column. Maps onto (or from) the
+#'   structural columns are dropped, because the anonymized frame already uses
+#'   the canonical names (`ID`, `TIME`, `EVID`, `AMT`, `DV`, ...).
+#'
+#' All other lines, including comments, are copied verbatim.
+#'
+#' @param model_file path to the original FeRx model file.
+#' @param data_path path to the simulation dataset (CSV).
+#' @param columns column names of the simulation dataset.
+#' @param path path to write the simulation copy to. Defaults to a temporary
+#'   `.ferx` file.
+#'
+#' @returns `path`, invisibly.
+#'
+#' @noRd
+prepare_simulation_model_file <- function(
+  model_file,
+  data_path,
+  columns,
+  path = tempfile(fileext = ".ferx")
+) {
+  lines <- readLines(model_file, warn = FALSE)
+  header_re <- "^\\s*\\[\\s*([A-Za-z_][A-Za-z0-9_]*)(\\s+[^]]*)?\\]\\s*(#.*)?$"
+  is_header <- grepl(header_re, lines)
+  block <- rep(NA_character_, length(lines))
+  current <- NA_character_
+  for (i in seq_along(lines)) {
+    if (is_header[i]) {
+      current <- tolower(sub(header_re, "\\1", lines[i]))
+    }
+    block[i] <- current
+  }
+
+  drop_blocks <- c("data_selection", "initial_values")
+  keep <- is.na(block) | !block %in% drop_blocks
+
+  data_body <- which(!is_header & !is.na(block) & block == "data")
+  if (length(data_body) > 0) {
+    covariate_cols <- setdiff(columns, anonymized_structural_columns())
+    path_written <- FALSE
+    abs_data_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+    for (i in data_body) {
+      content <- trimws(sub("#.*$", "", lines[i]))
+      if (!nzchar(content) || !grepl("=", content, fixed = TRUE)) next
+      key <- trimws(sub("=.*$", "", content))
+      value <- trimws(sub("^[^=]*=", "", content))
+      value <- gsub("^[\"']|[\"']$", "", value)
+      if (tolower(key) == "path") {
+        if (path_written) {
+          keep[i] <- FALSE
+        } else {
+          indent <- sub("^(\\s*).*$", "\\1", lines[i])
+          lines[i] <- paste0(indent, "path = \"", abs_data_path, "\"")
+          path_written <- TRUE
+        }
+        next
+      }
+      source_ok <- toupper(value) %in% toupper(covariate_cols)
+      target_free <- toupper(key) == toupper(value) ||
+        !toupper(key) %in% toupper(columns)
+      if (!source_ok || !target_free) keep[i] <- FALSE
+    }
+    if (!path_written) {
+      # A `[data]` block without `path` fails to parse; add the simulation path
+      # right after the block header.
+      header_idx <- which(is_header & block == "data")[1]
+      lines <- append(
+        lines,
+        paste0("  path = \"", abs_data_path, "\""),
+        after = header_idx
+      )
+      keep <- append(keep, TRUE, after = header_idx)
+    }
+  }
+
+  writeLines(lines[keep], path)
+  invisible(path)
 }
 
 apply_simulated_concentrations <- function(data, sim) {
