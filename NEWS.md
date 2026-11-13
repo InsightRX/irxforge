@@ -1,5 +1,10 @@
 # irxforge (development version)
 
+* `anonymize_dataset()`: new `design_cols` argument for study-design columns
+  (e.g. `DVID`, `OCC`, L2 `PAIR` indices, carried dose history, model row filters)
+  that are cloned verbatim from the matched source design instead of being dropped
+  or resampled. They are present in the data handed to `ferx_simulate()`, so models
+  that reference them can be simulated, and are kept in the returned dataset.
 * `check_nm_dataset()`: fixed a crash when `TIME` is non-numeric (e.g. date/clock
   strings) and `ADDL`/`II` are present — the overlapping-dose check now also guards
   on `is.numeric(TIME)` so the whole check no longer aborts before returning results.

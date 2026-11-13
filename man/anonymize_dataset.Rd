@@ -12,6 +12,7 @@ anonymize_dataset(
     = "RATE"),
   method = c("mice", "lme", "copulas"),
   cat_covs = NULL,
+  design_cols = NULL,
   loq = NULL,
   blq_method = c("remove", "cens"),
   sigdig = 4,
@@ -46,6 +47,19 @@ addition to factor and character covariates (which are always treated as
 categorical). Use this for numerically coded categorical covariates, e.g.
 \code{SEX = 0/1}, so they are not sampled as continuous values. They are
 returned with their original numeric codes.}
+
+\item{design_cols}{optional character vector of study-design columns to
+carry through verbatim from the matched source design, e.g. analyte or
+readout selectors (\code{DVID}), occasion indices for IOV (\code{OCC}), L2 pairing
+indices (\code{PAIR}), carried dose history (\code{TLST}, \code{LASTDOSE}) or row filters
+used by the model (\code{FLAG}). Unlike \code{covariates}, these columns are never
+resampled, imputed or rounded: each anonymized subject receives the values
+of the observed subject whose dosing/observation design it clones, record by
+record. They are included in the data passed to the FeRx simulation, so the
+model can reference them, and in the returned dataset. Must not overlap with
+\code{covariates} or the mapped \code{ID}, \code{EVID}, \code{AMT}, \code{TIME}, \code{DV} and \code{RATE}
+columns. Columns already carried through as part of the event design (\code{CMT},
+\code{MDV}, \code{ADDL}, \code{II}, \code{SS}) are accepted and kept as usual.}
 
 \item{loq}{optional numeric limit of quantification. Simulated observations
 below \code{loq} are handled according to \code{blq_method}.}

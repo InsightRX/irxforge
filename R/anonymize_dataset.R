@@ -22,6 +22,18 @@
 #'   categorical). Use this for numerically coded categorical covariates, e.g.
 #'   `SEX = 0/1`, so they are not sampled as continuous values. They are
 #'   returned with their original numeric codes.
+#' @param design_cols optional character vector of study-design columns to
+#'   carry through verbatim from the matched source design, e.g. analyte or
+#'   readout selectors (`DVID`), occasion indices for IOV (`OCC`), L2 pairing
+#'   indices (`PAIR`), carried dose history (`TLST`, `LASTDOSE`) or row filters
+#'   used by the model (`FLAG`). Unlike `covariates`, these columns are never
+#'   resampled, imputed or rounded: each anonymized subject receives the values
+#'   of the observed subject whose dosing/observation design it clones, record by
+#'   record. They are included in the data passed to the FeRx simulation, so the
+#'   model can reference them, and in the returned dataset. Must not overlap with
+#'   `covariates` or the mapped `ID`, `EVID`, `AMT`, `TIME`, `DV` and `RATE`
+#'   columns. Columns already carried through as part of the event design (`CMT`,
+#'   `MDV`, `ADDL`, `II`, `SS`) are accepted and kept as usual.
 #' @param loq optional numeric limit of quantification. Simulated observations
 #'   below `loq` are handled according to `blq_method`.
 #' @param blq_method how to handle simulated observations below `loq`.
@@ -78,6 +90,7 @@ anonymize_dataset <- function(
   ),
   method = c("mice", "lme", "copulas"),
   cat_covs = NULL,
+  design_cols = NULL,
   loq = NULL,
   blq_method = c("remove", "cens"),
   sigdig = 4,
@@ -116,7 +129,8 @@ anonymize_dataset <- function(
     covariates = covariates,
     model_file = model_file,
     dictionary = dictionary,
-    loq = loq
+    loq = loq,
+    design_cols = design_cols
   )
   if (any(data[[dictionary$EVID]] %in% c(3, 4))) {
     stop(
@@ -156,6 +170,7 @@ anonymize_dataset <- function(
     covariates = covariates,
     method = method,
     cat_covs = cat_covs,
+    design_cols = design_cols,
     dictionary = dictionary,
     model_file = model_file,
     id_var = id_var,
@@ -242,6 +257,7 @@ select_best_candidate <- function(
   covariates,
   method,
   cat_covs,
+  design_cols = NULL,
   dictionary,
   model_file,
   id_var,
@@ -263,7 +279,8 @@ select_best_candidate <- function(
   simulate_candidate <- function(sampled, candidate_seed) {
     anonymized <- build_anonymized_simulation_input(
       data = data, sampled_covs = sampled,
-      covariates = covariates, dictionary = dictionary
+      covariates = covariates, dictionary = dictionary,
+      design_cols = design_cols
     )
     sim <- simulate_anonymized_concentrations(
       model_file = model_file, data = anonymized, seed = candidate_seed
@@ -586,7 +603,8 @@ normalize_anonymize_dictionary <- function(dictionary) {
   utils::modifyList(defaults, dictionary)
 }
 
-validate_anonymize_inputs <- function(data, covariates, model_file, dictionary, loq) {
+validate_anonymize_inputs <- function(data, covariates, model_file, dictionary, loq,
+                                      design_cols = NULL) {
   if (!is.data.frame(data)) {
     stop("`data` must be a data.frame or tibble.", call. = FALSE)
   }
@@ -622,12 +640,45 @@ validate_anonymize_inputs <- function(data, covariates, model_file, dictionary, 
       call. = FALSE
     )
   }
+  if (!is.null(design_cols)) {
+    if (!is.character(design_cols) || anyNA(design_cols)) {
+      stop("`design_cols` must be a character vector or NULL.", call. = FALSE)
+    }
+    missing_design <- setdiff(design_cols, names(data))
+    if (length(missing_design) > 0) {
+      stop(
+        "`design_cols` were not found in `data`: ",
+        paste(missing_design, collapse = ", "),
+        call. = FALSE
+      )
+    }
+    # also reserve the standard output names, which the mapped columns are
+    # renamed to in the anonymized dataset
+    reserved <- union(structural, c("ID", "EVID", "AMT", "TIME", "DV", "RATE"))
+    design_structural <- intersect(design_cols, reserved)
+    if (length(design_structural) > 0) {
+      stop(
+        "`design_cols` cannot include mapped NONMEM columns: ",
+        paste(design_structural, collapse = ", "),
+        call. = FALSE
+      )
+    }
+    design_cov_overlap <- intersect(design_cols, covariates)
+    if (length(design_cov_overlap) > 0) {
+      stop(
+        "Columns cannot be both resampled `covariates` and verbatim ",
+        "`design_cols`: ", paste(design_cov_overlap, collapse = ", "),
+        call. = FALSE
+      )
+    }
+  }
   if (!is.null(loq) && (!is.numeric(loq) || length(loq) != 1 || is.na(loq))) {
     stop("`loq` must be a single numeric value.", call. = FALSE)
   }
 }
 
-build_anonymized_simulation_input <- function(data, sampled_covs, covariates, dictionary) {
+build_anonymized_simulation_input <- function(data, sampled_covs, covariates, dictionary,
+                                              design_cols = NULL) {
   id_var <- dictionary$ID
   time_var <- dictionary$TIME
   evid_var <- dictionary$EVID
@@ -641,6 +692,9 @@ build_anonymized_simulation_input <- function(data, sampled_covs, covariates, di
 
   optional_event_cols <- intersect(c(rate_var, "CMT", "MDV", "ADDL", "II", "SS"), names(data))
   event_cols <- unique(c(id_var, time_var, evid_var, amt_var, optional_event_cols))
+  # design columns (e.g. DVID, OCC, PAIR, dose history) are cloned verbatim
+  # from the matched design, record by record, and never resampled
+  design_cols <- setdiff(unique(design_cols), event_cols)
 
   # Pre-split both frames so each simulated subject is an O(1) lookup rather
   # than a full-table scan. Designs are keyed on the character form of the ID
@@ -672,7 +726,7 @@ build_anonymized_simulation_input <- function(data, sampled_covs, covariates, di
       next
     }
 
-    events <- design_rows[, event_cols, drop = FALSE]
+    events <- design_rows[, c(event_cols, design_cols), drop = FALSE]
     names(events)[names(events) == id_var] <- "ID"
     names(events)[names(events) == time_var] <- "TIME"
     names(events)[names(events) == evid_var] <- "EVID"
@@ -694,7 +748,10 @@ build_anonymized_simulation_input <- function(data, sampled_covs, covariates, di
     )
   }
   out <- dplyr::bind_rows(out)
-  order_cols <- unique(c("ID", "TIME", "EVID", "AMT", "RATE", "DV", "CMT", "MDV", "ADDL", "II", "SS", covariates))
+  order_cols <- unique(c(
+    "ID", "TIME", "EVID", "AMT", "RATE", "DV", "CMT", "MDV", "ADDL", "II", "SS",
+    design_cols, covariates
+  ))
   out[, intersect(order_cols, names(out)), drop = FALSE]
 }
 

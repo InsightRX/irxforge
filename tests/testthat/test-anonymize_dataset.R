@@ -628,3 +628,128 @@ test_that("cat_covs marks numerically coded covariates as categorical", {
   expect_type(out$SEX, "double")
   expect_equal(out$SEX, c(0, 0, 1, 1))
 })
+
+test_that("design_cols are cloned verbatim from the matched design", {
+  dat <- data.frame(
+    SUBJ = c("A", "A", "A", "B", "B", "B"),
+    TAD = c(0, 1, 2, 0, 1, 2),
+    EVENT = c(1, 0, 0, 1, 0, 0),
+    DOSE = c(100, 0, 0, 200, 0, 0),
+    CONC = c(0, 4, 3, 0, 8, 6),
+    WT = c(70, 70, 71, 80, 80, 81),
+    DVID = c(0, 1, 2, 0, 2, 1),
+    OCC = c(1, 1, 2, 1, 2, 2),
+    TLST = c(0, 0, 0, 0, 0, 0.12345678),
+    PATIENT_NAME = c("Ann", "Ann", "Ann", "Bob", "Bob", "Bob")
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  sampled_covs <- NULL
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(data, time_varying_covs, ...) {
+      # design columns are not handed to the covariate sampler
+      expect_false(any(c("DVID", "OCC", "TLST") %in% names(data)))
+      expect_equal(time_varying_covs, "WT")
+      data.frame(
+        SUBJ = c(1, 1, 1, 2, 2, 2),
+        .design_id = c("B", "B", "B", "A", "A", "A"),
+        TAD = c(0, 1, 2, 0, 1, 2),
+        WT = c(75, 76, 76, 65, 65, 66)
+      )
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      # design columns reach the simulation input, cloned from the matched design
+      expect_equal(data$DVID, c(0, 2, 1, 0, 1, 2))
+      expect_equal(data$OCC, c(1, 2, 2, 1, 1, 2))
+      expect_equal(data$TLST, c(0, 0, 0.12345678, 0, 0, 0))
+      data.frame(ID = c(1, 1, 2, 2), TIME = c(1, 2, 1, 2), DV_SIM = c(7, 8, 3, 4))
+    }
+  )
+
+  out <- anonymize_dataset(
+    data = dat,
+    covariates = "WT",
+    design_cols = c("DVID", "OCC", "TLST"),
+    model_file = model,
+    dictionary = list(ID = "SUBJ", TIME = "TAD", EVID = "EVENT", AMT = "DOSE", DV = "CONC"),
+    sigdig = 2
+  )
+
+  expect_named(out, c("ID", "TIME", "EVID", "AMT", "DV", "DVID", "OCC", "TLST", "WT"))
+  expect_false("PATIENT_NAME" %in% names(out))
+  expect_equal(out$DVID, c(0, 2, 1, 0, 1, 2))
+  expect_equal(out$OCC, c(1, 2, 2, 1, 1, 2))
+  # design columns are not rounded by `sigdig`
+  expect_equal(out$TLST, c(0, 0, 0.12345678, 0, 0, 0))
+  expect_equal(out$DV, c(0, 7, 8, 0, 3, 4))
+})
+
+test_that("design_cols survive BLQ removal on the remaining records", {
+  dat <- data.frame(
+    ID = c(1, 1, 1),
+    TIME = c(0, 1, 2),
+    EVID = c(1, 0, 0),
+    AMT = c(100, 0, 0),
+    DV = c(0, 5, 4),
+    WT = c(70, 70, 70),
+    DVID = c(0, 1, 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) {
+      data.frame(ID = 1, .design_id = 1, TIME = c(0, 1, 2), WT = 70)
+    },
+    simulate_anonymized_concentrations = function(...) {
+      data.frame(ID = c(1, 1), TIME = c(1, 2), DV_SIM = c(0.01, 3))
+    }
+  )
+  out <- anonymize_dataset(
+    dat, covariates = "WT", design_cols = "DVID", model_file = model, loq = 0.1
+  )
+  expect_equal(out$TIME, c(0, 2))
+  expect_equal(out$DVID, c(0, 2))
+})
+
+test_that("design_cols are validated", {
+  dat <- data.frame(
+    ID = 1, TIME = 0, EVID = 1, AMT = 100, DV = 0, WT = 70, OCC = 1, CMT = 1
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", design_cols = "NOPE", model_file = model),
+    "`design_cols` were not found"
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", design_cols = 1, model_file = model),
+    "must be a character vector"
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", design_cols = "TIME", model_file = model),
+    "cannot include mapped NONMEM"
+  )
+  expect_error(
+    anonymize_dataset(
+      dat, covariates = c("WT", "OCC"), design_cols = "OCC", model_file = model
+    ),
+    "both resampled `covariates` and verbatim `design_cols`"
+  )
+})
+
+test_that("design_cols overlapping event columns are kept once", {
+  dat <- data.frame(
+    ID = c(1, 1), TIME = c(0, 1), EVID = c(1, 0), AMT = c(100, 0),
+    DV = c(0, 5), CMT = c(1, 2), WT = 70, OCC = c(1, 1)
+  )
+  sampled <- data.frame(ID = 1, .design_id = "1", TIME = c(0, 1), WT = 70)
+  out <- build_anonymized_simulation_input(
+    data = dat, sampled_covs = sampled, covariates = "WT",
+    dictionary = normalize_anonymize_dictionary(list()),
+    design_cols = c("CMT", "OCC")
+  )
+  expect_named(out, c("ID", "TIME", "EVID", "AMT", "DV", "CMT", "OCC", "WT"))
+  expect_equal(out$CMT, c(1, 2))
+})
