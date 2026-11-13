@@ -1168,3 +1168,95 @@ test_that("strip_ferx_comment and is_absolute_path follow FeRx/OS conventions", 
   expect_true(all(is_absolute_path(c("/x/y", "~/x", "C:/x", "C:\\x", "\\\\srv\\x"))))
   expect_false(any(is_absolute_path(c("x.yaml", "fits/x.yaml", "./x", "../x"))))
 })
+
+test_that("unknown `...` arguments are rejected up front as unused", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
+    AMT = c(100, 0, 100, 0), DV = c(0, 5, 0, 4), WT = c(70, 70, 80, 80)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    simulate_anonymized_concentrations = function(...) {
+      stop("simulation should not be reached")
+    }
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", model_file = model, maxiter = 10),
+    "unused argument `maxiter` in `anonymize_dataset\\(\\)`.*this build of irxforge"
+  )
+  expect_error(
+    anonymize_dataset(
+      dat, covariates = "WT", model_file = model, foo = 1, bar = 2
+    ),
+    "unused arguments `foo`, `bar`"
+  )
+  # `trend` belongs to the LME sampler, not to MICE
+  expect_error(
+    anonymize_dataset(
+      dat, covariates = "WT", model_file = model, method = "mice", trend = "time"
+    ),
+    "unused argument `trend`.*method = \"mice\""
+  )
+  # arguments anonymize_dataset() sets itself cannot be passed again
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", model_file = model, n_subjects = 5),
+    "Cannot pass `n_subjects`.*set by `anonymize_dataset\\(\\)` itself"
+  )
+  expect_error(
+    anonymize_dataset(
+      dat, covariates = "WT", model_file = model, method = "mice", m = 2
+    ),
+    "Cannot pass `m`"
+  )
+})
+
+test_that("check_anonymize_dots accepts arguments of the selected sampler", {
+  expect_silent(check_anonymize_dots(NULL, n_dots = 0, method = "mice"))
+  # sampler formals and internal MICE arguments
+  expect_silent(
+    check_anonymize_dots(c("maxit", "noise", "replicates"), 3, method = "mice")
+  )
+  expect_silent(check_anonymize_dots(c("trend", "maxit"), 2, method = "lme"))
+  expect_silent(check_anonymize_dots(c("degree", "bw_mult"), 2, method = "copulas"))
+  # the copula sampler does not forward to MICE
+  expect_error(
+    check_anonymize_dots("maxit", 1, method = "copulas"),
+    "unused argument `maxit`"
+  )
+  expect_error(
+    check_anonymize_dots(c("maxit", ""), 2, method = "mice"),
+    "must be named"
+  )
+  expect_error(check_anonymize_dots(NULL, 1, method = "mice"), "must be named")
+})
+
+test_that("anonymize_dataset forwards accepted `...` arguments to the sampler", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
+    AMT = c(100, 0, 100, 0), DV = c(0, 5, 0, 4), WT = c(70, 70, 80, 80)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  received <- NULL
+  # validation reads the real sampler's formals, so wrap rather than replace
+  # the signature: the mock keeps the formals of the real MICE sampler
+  mock <- sample_covariates_mice_timevarying
+  body(mock) <- quote({
+    received <<- list(...)
+    data.frame(
+      ID = c(1, 1, 2, 2), .design_id = c(2, 2, 1, 1),
+      TIME = c(0, 1, 0, 1), WT = c(81, 81, 71, 71)
+    )
+  })
+  environment(mock) <- environment()
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = mock,
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      obs <- data[data$EVID == 0, ]
+      data.frame(ID = obs$ID, TIME = obs$TIME, DV_SIM = c(3, 4))
+    }
+  )
+  anonymize_dataset(dat, covariates = "WT", model_file = model, maxit = 7)
+  expect_equal(received, list(maxit = 7))
+})

@@ -109,8 +109,15 @@ run only once, on the selected covariate sample.}
 simulation. \code{NULL} (default) does not seed, so each call draws
 independently.}
 
-\item{...}{additional arguments passed to
-\code{\link[=sample_covariates_mice_timevarying]{sample_covariates_mice_timevarying()}}.}
+\item{...}{additional arguments passed to the time-varying sampler selected
+by \code{method} (\code{\link[=sample_covariates_mice_timevarying]{sample_covariates_mice_timevarying()}},
+\code{\link[=sample_covariates_lme_timevarying]{sample_covariates_lme_timevarying()}} or
+\code{\link[=sample_covariates_copulas_timevarying]{sample_covariates_copulas_timevarying()}}) and, for \code{"mice"} and \code{"lme"},
+on to the internal MICE implementation (e.g. \code{maxit}). Every argument must
+be named and accepted by that sampler. Unknown names (typos, or arguments
+added in a newer irxforge release) and arguments that
+\code{anonymize_dataset()} sets itself (e.g. \code{id_var}, \code{n_subjects}) are
+rejected up front with an "unused argument" error.}
 }
 \value{
 anonymized NONMEM-style data.frame, with one block of records per
