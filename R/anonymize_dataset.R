@@ -6,7 +6,10 @@
 #'
 #' @param data original NONMEM-style `data.frame` or `tibble`.
 #' @param covariates character vector of covariates to include in the
-#'   anonymized dataset.
+#'   anonymized dataset. May be `character(0)` for datasets without covariate
+#'   columns: covariate sampling is then skipped, and each observed subject's
+#'   dosing/observation design is cloned (in random order) onto a renumbered
+#'   subject `1:n` before the concentrations are simulated.
 #' @param model_file path to a FeRx model file used to simulate concentrations.
 #' @param dictionary named list mapping expected NONMEM column names to columns
 #'   in `data`. Supported keys are `ID`, `EVID`, `AMT`, `TIME`, `DV`, and
@@ -149,6 +152,13 @@ anonymize_dataset <- function(
       call. = FALSE
     )
   }
+  if (length(covariates) == 0 && n_candidates > 1 && score_on == "covariate") {
+    stop(
+      "`score_on = \"covariate\"` requires at least one covariate; use ",
+      "`score_on = \"concentration\"` or `n_candidates = 1` instead.",
+      call. = FALSE
+    )
+  }
 
   selected <- select_best_candidate(
     data = data,
@@ -195,6 +205,11 @@ anonymize_dataset <- function(
 draw_anonymize_candidate <- function(
   method, sample_data, covariates, cat_covs, id_var, time_var, n_subjects, seed, ...
 ) {
+  if (length(covariates) == 0) {
+    return(clone_anonymize_designs(
+      sample_data = sample_data, id_var = id_var, time_var = time_var, seed = seed
+    ))
+  }
   sampled <- switch(
     method,
     mice = sample_covariates_mice_timevarying(
@@ -223,6 +238,39 @@ draw_anonymize_candidate <- function(
     }
   }
   sampled
+}
+
+#' Clone observed designs onto renumbered subjects without covariates
+#'
+#' Used by [anonymize_dataset()] when `covariates` is empty, so there is nothing
+#' to sample. Each observed subject's design is assigned, in random order, to a
+#' new subject ID `1:n`, producing the same `id_var`/`time_var`/`.design_id`
+#' layout as the time-varying covariate samplers so that
+#' `build_anonymized_simulation_input()` can clone the dosing/observation
+#' records.
+#'
+#' @noRd
+clone_anonymize_designs <- function(sample_data, id_var, time_var, seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  design_ids <- unique(sample_data[[id_var]])
+  design_ids <- design_ids[sample.int(length(design_ids))]
+  data_split <- split(sample_data, as.character(sample_data[[id_var]]))
+  out <- lapply(seq_along(design_ids), function(i) {
+    design_id <- as.character(design_ids[[i]])
+    times <- data_split[[design_id]][[time_var]]
+    times <- times[order(times)]
+    rows <- data.frame(
+      id = rep(i, length(times)),
+      .design_id = rep(design_id, length(times)),
+      time = times,
+      stringsAsFactors = FALSE
+    )
+    names(rows) <- c(id_var, ".design_id", time_var)
+    rows
+  })
+  out <- do.call(rbind, out)
+  rownames(out) <- NULL
+  out
 }
 
 #' Draw, simulate and score candidates, returning the best anonymized dataset
@@ -590,8 +638,11 @@ validate_anonymize_inputs <- function(data, covariates, model_file, dictionary, 
   if (!is.data.frame(data)) {
     stop("`data` must be a data.frame or tibble.", call. = FALSE)
   }
-  if (!is.character(covariates) || length(covariates) == 0) {
-    stop("`covariates` must be a non-empty character vector.", call. = FALSE)
+  if (!is.character(covariates)) {
+    stop(
+      "`covariates` must be a character vector (use `character(0)` for none).",
+      call. = FALSE
+    )
   }
   if (!is.character(model_file) || length(model_file) != 1 || !file.exists(model_file)) {
     stop("`model_file` must point to an existing FeRx model file.", call. = FALSE)
@@ -681,8 +732,10 @@ build_anonymized_simulation_input <- function(data, sampled_covs, covariates, di
     events[["ID"]] <- sim_id
     events[["DV"]] <- 0
 
-    cov_out <- cov_rows[, covariates, drop = FALSE]
-    out[[i]] <- cbind(events, cov_out)
+    if (length(covariates) > 0) {
+      events <- cbind(events, cov_rows[, covariates, drop = FALSE])
+    }
+    out[[i]] <- events
     i <- i + 1L
   }
   if (length(skipped) > 0) {
