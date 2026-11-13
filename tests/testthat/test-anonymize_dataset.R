@@ -446,6 +446,24 @@ test_that("simulated DV is matched by CMT for multiple compartments at same ID/T
   expect_equal(out$DV, c(0, 12, 13, 22, 23))
 })
 
+test_that("blank CMT on observation records is dropped from the match key", {
+  data <- data.frame(
+    ID = c(1, 1, 1, 2, 2),
+    TIME = c(0, 1, 2, 0, 1),
+    EVID = c(1, 0, 0, 1, 0),
+    CMT = c(1, NA, NA, 1, NA),
+    DV = c(0, NA, NA, 0, NA)
+  )
+  # FeRx output in a different order, with CMT blank or filled
+  sim <- data.frame(ID = c(2, 1, 1), TIME = c(1, 2, 1), CMT = NA, DV_SIM = c(8, 6, 5))
+  out <- apply_simulated_concentrations(data, sim)
+  expect_equal(out$DV, c(0, 5, 6, 0, 8))
+
+  sim$CMT <- 1
+  out <- apply_simulated_concentrations(data, sim)
+  expect_equal(out$DV, c(0, 5, 6, 0, 8))
+})
+
 test_that("records sharing ID/TIME without CMT are matched in order of occurrence", {
   data <- data.frame(
     ID = c(1, 1, 1),

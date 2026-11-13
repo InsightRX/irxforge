@@ -946,13 +946,19 @@ apply_simulated_concentrations <- function(data, sim) {
   }
   data[["DV"]][mdv_flagged] <- NA
   # Match simulated concentrations back onto observation rows by ID and TIME
-  # (and CMT when available) rather than by position: FeRx is not guaranteed to
+  # (and CMT when populated) rather than by position: FeRx is not guaranteed to
   # return rows in the input order, so a positional copy can silently scramble
   # subjects/timepoints. Records sharing the same key (e.g. replicate samples)
   # are matched in order of occurrence via `.occ`.
   if (all(c("ID", "TIME") %in% names(sim))) {
     keys <- c("ID", "TIME")
-    if ("CMT" %in% names(sim) && "CMT" %in% names(data)) keys <- c(keys, "CMT")
+    # A blank `CMT` on observation records means "the model's default
+    # compartment", and an `NA` key matches nothing in `merge()`. Only key on
+    # `CMT` when it is populated on every observation and simulated row.
+    if ("CMT" %in% names(sim) && "CMT" %in% names(data) &&
+        !anyNA(data$CMT[obs_idx]) && !anyNA(sim$CMT)) {
+      keys <- c(keys, "CMT")
+    }
     occurrence <- function(df) {
       grp <- interaction(df[keys], drop = TRUE, lex.order = TRUE)
       stats::ave(seq_len(nrow(df)), grp, FUN = seq_along)
