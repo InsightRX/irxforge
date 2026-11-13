@@ -11,7 +11,7 @@ observed concentrations with FeRx-simulated values."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9044</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9046</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -186,8 +186,15 @@ independently.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
-<dd><p>additional arguments passed to
-<code><a href="sample_covariates_mice_timevarying.html">sample_covariates_mice_timevarying()</a></code>.</p></dd>
+<dd><p>additional arguments passed to the time-varying sampler selected
+by <code>method</code> (<code><a href="sample_covariates_mice_timevarying.html">sample_covariates_mice_timevarying()</a></code>,
+<code><a href="sample_covariates_lme_timevarying.html">sample_covariates_lme_timevarying()</a></code> or
+<code><a href="sample_covariates_copulas_timevarying.html">sample_covariates_copulas_timevarying()</a></code>) and, for <code>"mice"</code> and <code>"lme"</code>,
+on to the internal MICE implementation (e.g. <code>maxit</code>). Every argument must
+be named and accepted by that sampler. Unknown names (typos, or arguments
+added in a newer irxforge release) and arguments that
+<code>anonymize_dataset()</code> sets itself (e.g. <code>id_var</code>, <code>n_subjects</code>) are
+rejected up front with an "unused argument" error.</p></dd>
 
 </dl></div>
     <div class="section level2">

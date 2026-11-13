@@ -149,8 +149,18 @@ anonymize_dataset(
 
 - ...:
 
-  additional arguments passed to
-  [`sample_covariates_mice_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice_timevarying.md).
+  additional arguments passed to the time-varying sampler selected by
+  `method`
+  ([`sample_covariates_mice_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice_timevarying.md),
+  [`sample_covariates_lme_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_lme_timevarying.md)
+  or
+  [`sample_covariates_copulas_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_copulas_timevarying.md))
+  and, for `"mice"` and `"lme"`, on to the internal MICE implementation
+  (e.g. `maxit`). Every argument must be named and accepted by that
+  sampler. Unknown names (typos, or arguments added in a newer irxforge
+  release) and arguments that `anonymize_dataset()` sets itself (e.g.
+  `id_var`, `n_subjects`) are rejected up front with an "unused
+  argument" error.
 
 ## Value
 
