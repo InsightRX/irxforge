@@ -918,6 +918,138 @@ test_that("cloned designs are time-ordered and exposed via the design map", {
   expect_equal(subj2$EVID, c(0, 1, 0, 2))
 })
 
+test_that("prepare_simulation_model_file adapts a fitting model to the anonymized data", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c(
+    "# fitting model",
+    "[parameters]",
+    "  theta TVCL(0.1, 0.001, 10)",
+    "",
+    "[data]",
+    "  path = ../data/original.csv  # relative to the model",
+    "  AMT = DOSE",
+    "  ODV = dv",
+    "  DV = lndv",
+    "  TIME = tafd",
+    "  WT = weight",
+    "  CRCL = crcl_raw",
+    "  SCR = WT",
+    "",
+    "[initial_values]",
+    "  CL = 0.1",
+    "",
+    "[data_selection]",
+    "  ignore = FLAG == 1",
+    "",
+    "[fit_options]",
+    "  method = foce"
+  ), model)
+  data_path <- tempfile(fileext = ".csv")
+  out <- prepare_simulation_model_file(
+    model_file = model,
+    data_path = data_path,
+    columns = c("ID", "TIME", "EVID", "AMT", "DV", "weight", "SCR")
+  )
+  lines <- readLines(out)
+
+  expect_false(any(grepl("data_selection|ignore = FLAG", lines)))
+  expect_false(any(grepl("initial_values|CL = 0.1", lines)))
+  abs_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+  expect_true(paste0("  path = \"", abs_path, "\"") %in% lines)
+  expect_false(any(grepl("original.csv", lines)))
+  # structural maps and maps from dropped columns are removed
+  expect_false(any(grepl("AMT = DOSE|ODV = dv|DV = lndv|TIME = tafd|crcl_raw", lines)))
+  # a map from a surviving covariate is kept; one colliding with a column is not
+  expect_true("  WT = weight" %in% lines)
+  expect_false("  SCR = WT" %in% lines)
+  # unrelated content is copied verbatim
+  expect_true(all(c(
+    "# fitting model", "[parameters]", "  theta TVCL(0.1, 0.001, 10)",
+    "[data]", "[fit_options]", "  method = foce"
+  ) %in% lines))
+})
+
+test_that("prepare_simulation_model_file leaves models without [data] untouched", {
+  model <- tempfile(fileext = ".ferx")
+  src <- c("[parameters]", "  theta TVCL(0.1, 0.001, 10)", "[fit_options]", "  method = foce")
+  writeLines(src, model)
+  out <- prepare_simulation_model_file(model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV"))
+  expect_equal(readLines(out), src)
+})
+
+test_that("prepare_simulation_model_file adds a path to a [data] block without one", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[data]", "  DV = CONC", "[parameters]"), model)
+  data_path <- tempfile(fileext = ".csv")
+  out <- prepare_simulation_model_file(model, data_path, c("ID", "TIME", "DV"))
+  abs_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+  expect_equal(
+    readLines(out),
+    c("[data]", paste0("  path = \"", abs_path, "\""), "[parameters]")
+  )
+})
+
+test_that("simulate_anonymized_concentrations passes a simulation-ready model copy to ferx", {
+  skip_if_not_installed("ferx")
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[data]", "  path = orig.csv", "  AMT = DOSE", "[data_selection]", "  ignore = X == 1"), model)
+  captured <- NULL
+  local_mocked_bindings(
+    ferx_simulate = function(model, data, n_sim, seed = NULL) {
+      captured <<- list(model = model, model_lines = readLines(model), data = data)
+      data.frame(ID = 1, TIME = 1, DV_SIM = 1)
+    },
+    .package = "ferx"
+  )
+  dat <- data.frame(ID = 1, TIME = c(0, 1), EVID = c(1, 0), AMT = c(100, 0), DV = 0)
+  simulate_anonymized_concentrations(model, dat, seed = 1)
+  expect_false(identical(captured$model, model))
+  expect_length(captured$model_lines, 2)
+  expect_equal(captured$model_lines[1], "[data]")
+  expect_match(captured$model_lines[2], basename(captured$data), fixed = TRUE)
+  # temporary files are cleaned up
+  expect_false(file.exists(captured$model))
+})
+
+test_that("prepare_simulation_model_file keeps simultaneous/swapped covariate renames", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[data]", "  path = orig.csv", "  HTCM = WT", "  WT = HT"), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV", "HT", "WT")
+  )
+  expect_true(all(c("  HTCM = WT", "  WT = HT") %in% readLines(out)))
+
+  # a full swap is kept as well
+  writeLines(c("[data]", "  path = orig.csv", "  WT = HT", "  HT = WT"), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV", "HT", "WT")
+  )
+  expect_true(all(c("  WT = HT", "  HT = WT") %in% readLines(out)))
+})
+
+test_that("retain_data_maps drops renames that collide after the others are applied", {
+  # WT = HT collides once HTCM = WT is dropped (its source is absent: dropped
+  # earlier), so only the unrelated rename survives.
+  expect_equal(
+    retain_data_maps(c("WT", "BMI2"), c("HT", "BMI"), c("ID", "HT", "WT", "BMI")),
+    c(FALSE, TRUE)
+  )
+  # dropping one rename un-vacates its source and cascades
+  expect_equal(
+    retain_data_maps(c("A", "B"), c("B", "C"), c("A", "B", "C")),
+    c(FALSE, FALSE)
+  )
+  expect_equal(
+    retain_data_maps(c("A", "B", "Z"), c("B", "C", "A"), c("A", "B", "C")),
+    c(TRUE, TRUE, TRUE)
+  )
+  # duplicate targets: first one wins
+  expect_equal(
+    retain_data_maps(c("X", "X"), c("A", "B"), c("A", "B")),
+    c(TRUE, FALSE)
+  )
+})
+
 test_that("covariates without observed values are rejected up front", {
   model <- tempfile(fileext = ".ferx")
   file.create(model)
@@ -975,4 +1107,64 @@ test_that("baseline rows are the first record per subject ordered by time", {
     "no observed values at baseline"
   )
   expect_true(check_anonymize_observed_covariates(dat, character(0), "ID", "TIME"))
+})
+
+test_that("prepare_simulation_model_file handles `//` and `#` comments like FeRx", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c(
+    "[data] // source dataset",
+    "  path = orig.csv // relative",
+    "  WT = weight // body weight",
+    "  AMT = DOSE # dose column",
+    "[data_selection]   // fitting-only filter",
+    "  ignore = FLAG == 1",
+    "[fit_options] # options",
+    "  method = foce // estimation"
+  ), model)
+  data_path <- tempfile(fileext = ".csv")
+  out <- prepare_simulation_model_file(
+    model, data_path, c("ID", "TIME", "EVID", "AMT", "DV", "weight")
+  )
+  abs_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+  expect_equal(readLines(out), c(
+    "[data] // source dataset",
+    paste0("  path = \"", abs_path, "\""),
+    "  WT = weight // body weight",
+    "[fit_options] # options",
+    "  method = foce // estimation"
+  ))
+})
+
+test_that("prepare_simulation_model_file makes a relative [priors] from_fit absolute", {
+  model_dir <- tempfile("model_dir")
+  dir.create(file.path(model_dir, "fits"), recursive = TRUE)
+  fit_file <- file.path(model_dir, "fits", "prev-fit.yaml")
+  file.create(fit_file)
+  model <- file.path(model_dir, "model.ferx")
+  writeLines(c(
+    "[priors]  // import",
+    "  from_fit = \"fits/prev-fit.yaml\" # previous run",
+    "[fit_options]",
+    "  method = foce"
+  ), model)
+  out <- prepare_simulation_model_file(model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV"))
+  lines <- readLines(out)
+  expect_equal(lines[1], "[priors]  // import")
+  abs_fit <- normalizePath(fit_file, winslash = "/")
+  expect_equal(lines[2], paste0("  from_fit = \"", abs_fit, "\""))
+  expect_true(file.exists(sub("^\\s*from_fit = \"(.*)\"$", "\\1", lines[2])))
+
+  # absolute references are left untouched
+  writeLines(c("[priors]", paste0("  from_fit = \"", abs_fit, "\"")), model)
+  out <- prepare_simulation_model_file(model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV"))
+  expect_equal(readLines(out), c("[priors]", paste0("  from_fit = \"", abs_fit, "\"")))
+})
+
+test_that("strip_ferx_comment and is_absolute_path follow FeRx/OS conventions", {
+  expect_equal(
+    strip_ferx_comment(c("a = b // c # d", "a = b # c // d", "a = b")),
+    c("a = b ", "a = b ", "a = b")
+  )
+  expect_true(all(is_absolute_path(c("/x/y", "~/x", "C:/x", "C:\\x", "\\\\srv\\x"))))
+  expect_false(any(is_absolute_path(c("x.yaml", "fits/x.yaml", "./x", "../x"))))
 })
