@@ -175,3 +175,89 @@ test_that("linear predictors overflowing to Inf do not produce NaN probabilities
     expect_false(anyNA(out$RACE))
   }
 })
+
+test_that("predictors on very different scales do not make the regression singular", {
+  set.seed(1)
+  n <- 200
+  dat <- data.frame(WT = stats::rnorm(n, 70, 10))
+  dat$K <- stats::runif(n, 1e-9, 2e-9)
+  dat$BIG <- dat$WT * 1e8
+  dat$AGE <- 30 + 0.5 * dat$WT + stats::rnorm(n)
+  dat$AGE[1:20] <- NA
+  expect_no_warning(out <- mice_impute(dat, maxit = 2)[[1]])
+  expect_false(anyNA(out$AGE))
+})
+
+test_that("singular regression falls back to pseudo-inverse and names variables", {
+  set.seed(1)
+  n <- 200
+  dat <- data.frame(WT = stats::rnorm(n, 70, 10), HT = stats::rnorm(n, 170, 10))
+  dat$WT2 <- dat$WT
+  dat$AGE <- 30 + 0.5 * dat$WT + stats::rnorm(n)
+  dat$AGE[1:20] <- NA
+  expect_warning(
+    out <- mice_impute(dat, m = 2, maxit = 3, ridge = 0)[[1]],
+    "impute `AGE` are \\(nearly\\) collinear: `WT`, `WT2`\\.",
+    class = "irxforge_mice_collinear_warning"
+  )
+  expect_false(anyNA(out$AGE))
+  # warned only once, despite repeated draws over iterations and replicates
+  warnings <- character()
+  withCallingHandlers(
+    mice_impute(dat, m = 2, maxit = 3, ridge = 0),
+    warning = function(w) {
+      warnings <<- c(warnings, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_length(warnings, 1)
+})
+
+test_that("errors during imputation name the variable being imputed", {
+  local_mocked_bindings(
+    mice_norm_draw = function(...) stop("boom")
+  )
+  dat <- data.frame(WT = c(NA, 2, 3, 4), AGE = c(1, 2, 3, 5))
+  expect_error(
+    mice_impute(dat),
+    "Imputation of variable `WT` \\(method `pmm`\\) failed: boom"
+  )
+})
+
+test_that("mice_design_matrix names columns after predictors and levels", {
+  df <- data.frame(
+    AGE = c(1, 2, 3),
+    RACE = factor(c("A", "B", "C")),
+    CONST = 1
+  )
+  X <- mice_design_matrix(df)
+  expect_equal(colnames(X), c("(Intercept)", "AGE", "RACEB", "RACEC"))
+})
+
+test_that("mice_collinear_predictors identifies aliased columns and partners", {
+  set.seed(1)
+  X <- cbind("(Intercept)" = 1, A = stats::rnorm(20), B = stats::rnorm(20))
+  X <- cbind(X, C = X[, "A"] * 2, D = stats::rnorm(20))
+  expect_equal(mice_collinear_predictors(X), c("A", "C"))
+  expect_equal(mice_collinear_predictors(X[, -4]), character())
+})
+
+test_that("warn_integer_coded_covariates flags likely categorical codes", {
+  dat <- data.frame(
+    SEX = rep(c(0L, 1L), 5),
+    FED = rep(c(0, 1, 2, 1, 0), 2),
+    WT = seq(50, 95, by = 5),
+    DOSE = rep(c(1, 2, 3, 4, 5), 2),
+    FRAC = rep(c(0.5, 1), 5),
+    CONST = 1
+  )
+  expect_warning(
+    res <- warn_integer_coded_covariates(dat, names(dat)),
+    "`SEX`, `FED`",
+    class = "irxforge_integer_coded_warning"
+  )
+  expect_equal(res, c("SEX", "FED"))
+  expect_no_warning(
+    warn_integer_coded_covariates(dat, names(dat), cat_covs = c("SEX", "FED"))
+  )
+})
