@@ -4,6 +4,10 @@
   <integer> and `..2$.SEX_lag` <factor>") when categorical covariates are stored as
   integer codes and at least one covariate is time-varying. Observed and simulated
   rows are now coerced to factors with a shared level set before stacking (#18).
+* `anonymize_dataset()`: `covariates` may now be `character(0)` for datasets without
+  covariate columns. Covariate sampling is skipped; subjects are still renumbered
+  `1:n` (with each observed design cloned onto a new subject in random order) and
+  `DV` is still replaced by simulated concentrations (#20).
 * `check_nm_dataset()`: fixed a crash when `TIME` is non-numeric (e.g. date/clock
   strings) and `ADDL`/`II` are present — the overlapping-dose check now also guards
   on `is.numeric(TIME)` so the whole check no longer aborts before returning results.

@@ -26,7 +26,10 @@ anonymize_dataset(
 \item{data}{original NONMEM-style \code{data.frame} or \code{tibble}.}
 
 \item{covariates}{character vector of covariates to include in the
-anonymized dataset.}
+anonymized dataset. May be \code{character(0)} for datasets without covariate
+columns: covariate sampling is then skipped, and each observed subject's
+dosing/observation design is cloned (in random order) onto a renumbered
+subject \code{1:n} before the concentrations are simulated.}
 
 \item{model_file}{path to a FeRx model file used to simulate concentrations.}
 
