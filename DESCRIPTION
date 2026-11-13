@@ -1,6 +1,6 @@
 Package: irxforge
 Title: Forging data for pharmacometric analyses
-Version: 0.0.0.9037
+Version: 0.0.0.9038
 Authors@R: c(
     person("Ron", "Keizer", email = "ron@insight-rx.com", role = c("cre", "aut")),
     person("Michael", "McCarthy", email = "michael.mccarthy@insight-rx.com", role = "ctb"),
@@ -40,4 +40,4 @@ Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 URL: https://insightrx.github.io/irxforge/
-Config/roxygen2/version: 8.0.0
+Config/roxygen2/version: 8.1.0
