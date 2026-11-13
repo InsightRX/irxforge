@@ -2,6 +2,12 @@
 
 ## irxforge (development version)
 
+- [`sample_covariates_mice_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice_timevarying.md):
+  fixed a crash (“Can’t combine `..1$.SEX_lag` and `..2$.SEX_lag` ”)
+  when categorical covariates are stored as integer codes and at least
+  one covariate is time-varying. Observed and simulated rows are now
+  coerced to factors with a shared level set before stacking (#18).
+
 - [`anonymize_dataset()`](https://insightrx.github.io/irxforge/reference/anonymize_dataset.md):
   the guard against time-reset records now tests what the time-varying
   samplers actually need — a non-decreasing `TIME` within every subject
