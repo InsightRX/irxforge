@@ -695,6 +695,14 @@ test_that("anonymize_dataset rejects time axes that restart, and replicates", {
     anonymize_dataset(dat, covariates = "WT", model_file = model, replicates = 2),
     "`replicates` is not supported"
   )
+  # `replicates` forwarded through a wrapper's `...` is still evaluated in the
+  # caller's environment
+  wrapper <- function(...) {
+    reps <- 2
+    anonymize_dataset(dat, covariates = "WT", model_file = model, ...)
+  }
+  n_reps <- 3
+  expect_error(wrapper(replicates = n_reps), "`replicates` is not supported")
 })
 
 test_that("covariate features ignore unused factor ID levels", {
@@ -1190,6 +1198,13 @@ test_that("unknown `...` arguments are rejected up front as unused", {
       dat, covariates = "WT", model_file = model, foo = 1, bar = 2
     ),
     "unused arguments `foo`, `bar`"
+  )
+  # names are checked before any `...` argument is evaluated
+  expect_error(
+    anonymize_dataset(
+      dat, covariates = "WT", model_file = model, foo = stop("boom")
+    ),
+    "unused argument `foo`"
   )
   # `trend` belongs to the LME sampler, not to MICE
   expect_error(

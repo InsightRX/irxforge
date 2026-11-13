@@ -140,7 +140,12 @@ anonymize_dataset <- function(
       is.na(n_candidates) || n_candidates < 1 || n_candidates != round(n_candidates)) {
     stop("`n_candidates` must be a single positive integer.", call. = FALSE)
   }
-  replicates <- list(...)[["replicates"]]
+  # validate the `...` names before any of them is evaluated, so an unknown
+  # argument is reported as such even if evaluating it would fail
+  dots <- as.list(match.call(expand.dots = FALSE)$...)
+  check_anonymize_dots(names(dots), n_dots = length(dots), method = method)
+  # force only `replicates` (if supplied), leaving other promises untouched
+  replicates <- (function(..., replicates = NULL) replicates)(...)
   if (!is.null(replicates) && !identical(as.numeric(replicates), 1)) {
     stop(
       "`replicates` is not supported by `anonymize_dataset()`: each call ",
@@ -149,11 +154,6 @@ anonymize_dataset <- function(
       call. = FALSE
     )
   }
-  check_anonymize_dots(
-    names(as.list(match.call(expand.dots = FALSE)$...)),
-    n_dots = ...length(),
-    method = method
-  )
   data <- as.data.frame(data)
   dictionary <- normalize_anonymize_dictionary(dictionary)
   validate_anonymize_inputs(
