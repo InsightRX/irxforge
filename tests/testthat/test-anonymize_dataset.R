@@ -558,7 +558,7 @@ test_that("MDV is recomputed from the simulated concentrations", {
   expect_equal(removed$MDV, c(1L, 1L, 0L))
 })
 
-test_that("anonymize_dataset rejects time-reset records and replicates", {
+test_that("anonymize_dataset rejects time axes that restart, and replicates", {
   dat <- data.frame(
     ID = c(1, 1, 1, 1), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 4, 0),
     AMT = c(100, 0, 100, 0), DV = c(0, 5, 0, 4), WT = 70
@@ -567,7 +567,7 @@ test_that("anonymize_dataset rejects time-reset records and replicates", {
   file.create(model)
   expect_error(
     anonymize_dataset(dat, covariates = "WT", model_file = model),
-    "time-reset records"
+    "decreases within 1 subject\\(s\\): 1\\..*time-reset records"
   )
   dat$EVID[3] <- 1
   dat$TIME <- c(0, 1, 2, 3)
@@ -691,4 +691,60 @@ test_that("anonymize_dataset accepts an empty covariate set", {
     anonymize_dataset(dat, covariates = NULL, model_file = model),
     "must be a character vector"
   )
+})
+
+test_that("monotone time check reports offending subjects", {
+  dat <- data.frame(
+    ID = c(1, 1, 1, 2, 2, 2, 3, 3),
+    TIME = c(0, 1, 2, 0, 5, 3, 0, 1),
+    EVID = c(1, 0, 0, 1, 0, 0, 1, 0)
+  )
+  expect_error(
+    check_anonymize_monotone_time(dat, "ID", "TIME", "EVID"),
+    "decreases within 1 subject\\(s\\): 2\\.$"
+  )
+  # no EVID 3/4 -> no reset hint
+  err <- tryCatch(
+    check_anonymize_monotone_time(dat, "ID", "TIME", "EVID"),
+    error = conditionMessage
+  )
+  expect_false(grepl("EVID 3 or 4", err))
+
+  # ties and missing times are allowed
+  ok <- data.frame(
+    ID = c(1, 1, 1, 1), TIME = c(0, 0, NA, 2), EVID = c(1, 0, 2, 0)
+  )
+  expect_true(check_anonymize_monotone_time(ok, "ID", "TIME", "EVID"))
+
+  # many offending subjects are truncated
+  many <- data.frame(ID = rep(1:12, each = 2), TIME = rep(c(1, 0), 12), EVID = 0)
+  expect_error(
+    check_anonymize_monotone_time(many, "ID", "TIME", "EVID"),
+    "12 subject\\(s\\): 1, 2, .*, 10 \\(and 2 more\\)"
+  )
+})
+
+test_that("anonymize_dataset accepts reset records with a monotone time axis", {
+  dat <- data.frame(
+    ID = c(1, 1, 1, 1, 2, 2, 2, 2),
+    TIME = c(0, 1, 24, 25, 0, 1, 24, 25),
+    EVID = c(1, 0, 4, 0, 1, 0, 3, 0),
+    AMT = c(100, 0, 100, 0, 100, 0, 0, 0),
+    DV = c(0, 5, 0, 4, 0, 6, 0, 5),
+    WT = c(70, 70, 70, 70, 80, 80, 80, 80)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      data.frame(
+        ID = data$ID[data$EVID == 0],
+        TIME = data$TIME[data$EVID == 0],
+        DV_SIM = 3
+      )
+    }
+  )
+  out <- anonymize_dataset(dat, covariates = "WT", model_file = model, seed = 1)
+  expect_true(any(out$EVID %in% c(3, 4)))
+  expect_equal(nrow(out), nrow(dat))
 })
