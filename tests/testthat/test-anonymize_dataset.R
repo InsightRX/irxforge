@@ -458,6 +458,58 @@ test_that("records sharing ID/TIME without CMT are matched in order of occurrenc
   expect_equal(out$DV, c(0, 5, 6))
 })
 
+test_that("EVID == 0 records flagged MDV == 1 are skipped, matching FeRx", {
+  data <- data.frame(
+    ID = c(1, 1, 1, 1),
+    TIME = c(0, 1, 2, 3),
+    EVID = c(1, 0, 0, 0),
+    MDV = c(1, 0, 1, 0),
+    DV = c(0, 0, 0, 0)
+  )
+  # FeRx returns no row for the MDV == 1 sample at TIME 2
+  sim <- data.frame(ID = c(1, 1), TIME = c(1, 3), DV_SIM = c(5, 7))
+  out <- apply_simulated_concentrations(data, sim)
+  expect_equal(out$DV, c(0, 5, NA, 7))
+  expect_equal(recompute_anonymized_mdv(out)$MDV, c(1L, 0L, 1L, 0L))
+
+  # Positional path (no ID/TIME in FeRx output)
+  out_pos <- apply_simulated_concentrations(data, sim["DV_SIM"])
+  expect_equal(out_pos$DV, c(0, 5, NA, 7))
+})
+
+test_that("FeRx rows for every EVID == 0 record are still accepted", {
+  data <- data.frame(
+    ID = c(1, 1, 1),
+    TIME = c(0, 1, 2),
+    EVID = c(1, 0, 0),
+    MDV = c(1, 1, 0),
+    DV = c(0, 0, 0)
+  )
+  sim <- data.frame(ID = c(1, 1), TIME = c(1, 2), DV_SIM = c(5, 7))
+  out <- apply_simulated_concentrations(data, sim)
+  expect_equal(out$DV, c(0, 5, 7))
+})
+
+test_that("row-count mismatch error names the MDV == 1 records", {
+  data <- data.frame(
+    ID = c(1, 1, 1, 1),
+    TIME = c(0, 1, 2, 3),
+    EVID = c(1, 0, 0, 0),
+    MDV = c(1, 0, 1, 0),
+    DV = c(0, 0, 0, 0)
+  )
+  sim <- data.frame(ID = 1, TIME = 1, DV_SIM = 5)
+  expect_error(
+    apply_simulated_concentrations(data, sim),
+    "FeRx returned 1 rows for 3 `EVID == 0` records\\. 1 of them are flagged `MDV == 1`"
+  )
+  data$MDV <- NULL
+  expect_error(
+    apply_simulated_concentrations(data, sim),
+    "FeRx returned 1 rows for 3 `EVID == 0` records; expected one simulated row"
+  )
+})
+
 test_that("score_on = 'concentration' errors without positive observed concentrations", {
   dat <- data.frame(
     SUBJ = c("A", "A", "B", "B"),
@@ -932,4 +984,63 @@ test_that("retain_data_maps drops renames that collide after the others are appl
     retain_data_maps(c("X", "X"), c("A", "B"), c("A", "B")),
     c(TRUE, FALSE)
   )
+})
+
+test_that("covariates without observed values are rejected up front", {
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2),
+    TIME = c(0, 1, 0, 1),
+    EVID = c(1, 0, 1, 0),
+    AMT = c(100, 0, 100, 0),
+    DV = c(0, 5, 0, 6),
+    WT = c(70, 70, 80, 80),
+    HT = c(NA, 170, NA, 180),
+    AST = c(NA, 20, NA, NA),
+    ALT = NA_real_,
+    CREA = NA_real_
+  )
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) {
+      stop("sampler should not be reached")
+    }
+  )
+  err <- tryCatch(
+    anonymize_dataset(
+      dat, covariates = c("WT", "HT", "AST", "ALT", "CREA"), model_file = model
+    ),
+    error = conditionMessage
+  )
+  expect_match(err, "no observed values: ALT, CREA", fixed = TRUE)
+  expect_match(
+    err,
+    "no observed values at baseline (first record per subject): HT, AST",
+    fixed = TRUE
+  )
+  expect_false(grepl("sampler should not be reached", err))
+
+  # only baseline-missing covariates: message does not claim no values overall
+  err <- tryCatch(
+    anonymize_dataset(dat, covariates = c("WT", "HT"), model_file = model),
+    error = conditionMessage
+  )
+  expect_match(err, "at baseline")
+  expect_false(grepl("no observed values: ", err, fixed = TRUE))
+})
+
+test_that("baseline rows are the first record per subject ordered by time", {
+  # rows out of time order: the earliest record per subject is the baseline
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2),
+    TIME = c(1, 0, 1, 0),
+    HT = c(NA, 170, NA, NA)
+  )
+  expect_true(check_anonymize_observed_covariates(dat, "HT", "ID", "TIME"))
+  dat$HT <- c(170, NA, 180, NA)
+  expect_error(
+    check_anonymize_observed_covariates(dat, "HT", "ID", "TIME"),
+    "no observed values at baseline"
+  )
+  expect_true(check_anonymize_observed_covariates(dat, character(0), "ID", "TIME"))
 })
