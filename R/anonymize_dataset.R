@@ -946,35 +946,36 @@ apply_simulated_concentrations <- function(data, sim) {
   }
   data[["DV"]][mdv_flagged] <- NA
   # Match simulated concentrations back onto observation rows by ID and TIME
-  # (and CMT when populated) rather than by position: FeRx is not guaranteed to
+  # (and CMT when available) rather than by position: FeRx is not guaranteed to
   # return rows in the input order, so a positional copy can silently scramble
   # subjects/timepoints. Records sharing the same key (e.g. replicate samples)
   # are matched in order of occurrence via `.occ`.
   if (all(c("ID", "TIME") %in% names(sim))) {
-    keys <- c("ID", "TIME")
-    # A blank `CMT` on observation records means "the model's default
-    # compartment", and an `NA` key matches nothing in `merge()`. Only key on
-    # `CMT` when it is populated on every observation and simulated row.
-    if ("CMT" %in% names(sim) && "CMT" %in% names(data) &&
-        !anyNA(data$CMT[obs_idx]) && !anyNA(sim$CMT)) {
-      keys <- c(keys, "CMT")
+    obs <- data[obs_idx, intersect(c("ID", "TIME", "CMT"), names(data)), drop = FALSE]
+    sim_keyed <- sim
+    if ("CMT" %in% names(sim) && "CMT" %in% names(data)) {
+      # A blank `CMT` on an observation record means "the model's default
+      # compartment", and an `NA` key matches nothing in `merge()`. Fill blanks
+      # the way FeRx does (compartment 1) on both sides so populated
+      # compartments still disambiguate records sharing ID/TIME.
+      obs$CMT[is.na(obs$CMT)] <- 1
+      sim_keyed$CMT[is.na(sim_keyed$CMT)] <- 1
+      merged <- match_sim_by_keys(obs, sim_keyed, c("ID", "TIME", "CMT"))
+      if (is.null(merged) &&
+          (anyNA(data$CMT[obs_idx]) || anyNA(sim$CMT)) &&
+          !any_key_spans_compartments(data[obs_idx, , drop = FALSE])) {
+        # The default compartment FeRx assigned to blank records differs from
+        # 1. Without CMT, records are matched by ID/TIME and occurrence; that
+        # is only safe when no ID/TIME pair is observed in more than one
+        # compartment, which was just checked.
+        merged <- match_sim_by_keys(obs, sim_keyed, c("ID", "TIME"))
+      }
+      keys <- c("ID", "TIME", "CMT")
+    } else {
+      keys <- c("ID", "TIME")
+      merged <- match_sim_by_keys(obs, sim_keyed, keys)
     }
-    occurrence <- function(df) {
-      grp <- interaction(df[keys], drop = TRUE, lex.order = TRUE)
-      stats::ave(seq_len(nrow(df)), grp, FUN = seq_along)
-    }
-    obs <- data[obs_idx, keys, drop = FALSE]
-    obs[[".obs_order"]] <- seq_along(obs_idx)
-    obs[[".occ"]] <- occurrence(obs)
-    sim_keyed <- sim[, c(keys, "DV_SIM"), drop = FALSE]
-    sim_keyed[[".occ"]] <- occurrence(sim_keyed)
-    merged <- merge(
-      obs,
-      sim_keyed,
-      by = c(keys, ".occ"),
-      sort = FALSE
-    )
-    if (nrow(merged) != length(obs_idx)) {
+    if (is.null(merged)) {
       stop(
         "FeRx simulation output could not be uniquely matched to observation ",
         "records by ", paste(keys, collapse = ", "), ".",
@@ -987,6 +988,34 @@ apply_simulated_concentrations <- function(data, sim) {
     data[["DV"]][obs_idx] <- sim[["DV_SIM"]]
   }
   data
+}
+
+# Match FeRx `sim` rows onto observation rows `obs` by `keys`, pairing records
+# that share a key in order of occurrence. Returns the merged rows (with
+# `.obs_order` and `DV_SIM` columns), or `NULL` when the rows cannot all be matched one-to-one.
+match_sim_by_keys <- function(obs, sim, keys) {
+  occurrence <- function(df) {
+    grp <- interaction(df[keys], drop = TRUE, lex.order = TRUE)
+    stats::ave(seq_len(nrow(df)), grp, FUN = seq_along)
+  }
+  obs <- obs[, keys, drop = FALSE]
+  obs[[".obs_order"]] <- seq_len(nrow(obs))
+  obs[[".occ"]] <- occurrence(obs)
+  sim <- sim[, c(keys, "DV_SIM"), drop = FALSE]
+  sim[[".occ"]] <- occurrence(sim)
+  merged <- merge(obs, sim, by = c(keys, ".occ"), sort = FALSE)
+  if (nrow(merged) != nrow(obs)) return(NULL)
+  merged
+}
+
+# TRUE when some ID/TIME pair among the observation records appears with more
+# than one distinct CMT value (a blank CMT counts as its own value).
+any_key_spans_compartments <- function(obs) {
+  cmt <- ifelse(is.na(obs$CMT), "<NA>", as.character(obs$CMT))
+  n_cmt <- tapply(cmt, paste(obs$ID, obs$TIME, sep = "\r"), function(x) {
+    length(unique(x))
+  })
+  any(n_cmt > 1)
 }
 
 #' Recompute MDV from the final EVID and DV values

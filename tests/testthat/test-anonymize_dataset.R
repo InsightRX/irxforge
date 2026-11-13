@@ -464,6 +464,52 @@ test_that("blank CMT on observation records is dropped from the match key", {
   expect_equal(out$DV, c(0, 5, 6, 0, 8))
 })
 
+test_that("blank CMT does not disable compartment matching for other records", {
+  data <- data.frame(
+    ID = c(1, 1, 1, 1, 1, 1),
+    TIME = c(0, 1, 1, 2, 2, 3),
+    EVID = c(1, 0, 0, 0, 0, 0),
+    CMT = c(1, 2, 3, 2, 3, NA),
+    DV = c(0, NA, NA, NA, NA, NA)
+  )
+  # CMT 2/3 rows at shared ID/TIME come back in reverse order
+  sim <- data.frame(
+    ID = c(1, 1, 1, 1, 1),
+    TIME = c(3, 2, 2, 1, 1),
+    CMT = c(NA, 3, 2, 3, 2),
+    DV_SIM = c(31, 23, 22, 13, 12)
+  )
+  out <- apply_simulated_concentrations(data, sim)
+  expect_equal(out$DV, c(0, 12, 13, 22, 23, 31))
+
+  # FeRx fills the blank CMT with compartment 1
+  sim$CMT[1] <- 1
+  out <- apply_simulated_concentrations(data, sim)
+  expect_equal(out$DV, c(0, 12, 13, 22, 23, 31))
+
+  # FeRx assigns the blank record a different default compartment. Dropping
+  # CMT would match the shared ID/TIME rows by occurrence only and swap them,
+  # so an error is raised instead of a silent misassignment.
+  sim$CMT[1] <- 2
+  expect_error(
+    apply_simulated_concentrations(data, sim),
+    "could not be uniquely matched to observation records by ID, TIME, CMT"
+  )
+})
+
+test_that("blank CMT falls back to ID/TIME when FeRx uses another default compartment", {
+  data <- data.frame(
+    ID = c(1, 1, 1),
+    TIME = c(0, 1, 2),
+    EVID = c(1, 0, 0),
+    CMT = c(1, NA, NA),
+    DV = c(0, NA, NA)
+  )
+  sim <- data.frame(ID = c(1, 1), TIME = c(2, 1), CMT = c(2, 2), DV_SIM = c(6, 5))
+  out <- apply_simulated_concentrations(data, sim)
+  expect_equal(out$DV, c(0, 5, 6))
+})
+
 test_that("records sharing ID/TIME without CMT are matched in order of occurrence", {
   data <- data.frame(
     ID = c(1, 1, 1),
