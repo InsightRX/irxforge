@@ -97,7 +97,23 @@ independently.}
 \code{\link[=sample_covariates_mice_timevarying]{sample_covariates_mice_timevarying()}}.}
 }
 \value{
-anonymized NONMEM-style data.frame.
+anonymized NONMEM-style data.frame, with one block of records per
+anonymized subject (\code{ID} \code{1:n}). Each block is a clone of one observed
+subject's dosing/observation design, returned \strong{ordered by time within
+subject} (a stable sort on \code{TIME}, so records sharing a time keep their
+source order and records with a missing time are placed last). The result
+carries these attributes:
+\itemize{
+\item \code{"design_map"}: a \code{data.frame} with one row per anonymized subject and
+columns \code{ID} (the anonymized subject ID) and \code{DESIGN_ID} (the ID of the
+observed subject in \code{data} whose design was cloned, in its original
+type). Use it to relate anonymized subjects back to their source design
+without reconstructing it from the event records. Note that this mapping
+links the anonymized dataset to the source subjects, so it should not be
+shared alongside the anonymized data.
+\item \code{"similarity_score"}: the selected candidate's score when
+\code{n_candidates > 1}, otherwise \code{NULL}.
+}
 }
 \description{
 Creates an anonymized NONMEM-style dataset by renumbering subjects, sampling
