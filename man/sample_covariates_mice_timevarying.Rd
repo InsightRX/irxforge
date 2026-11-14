@@ -23,7 +23,9 @@ sample_covariates_mice_timevarying(
   cont_method = "pmm",
   replicates = 1,
   seed = NULL,
-  ...
+  ...,
+  min_donors = 1000,
+  progress = interactive()
 )
 }
 \arguments{
@@ -106,6 +108,20 @@ Default \code{NULL} does not set a seed.}
 
 \item{...}{additional arguments passed to the internal MICE implementation
 (e.g. \code{maxit}).}
+
+\item{min_donors}{minimum number of observed transitions used as donors
+when imputing each time index. Transitions are pooled by their time index
+(the position of the row within its subject's profile): at time index \code{k}
+the donor pool holds the transitions at index \code{k}, widened symmetrically to
+neighbouring indices until it contains at least \code{min_donors} rows. This
+keeps the cost of each step proportional to the number of subjects still
+active at that index rather than to \code{nrow(data)}, and restricts donors to
+transitions at comparable positions in the profile. Default \code{1000}. When
+\code{data} has at most \code{min_donors} transitions, every step uses all of them.
+Use \code{Inf} to always use all observed transitions.}
+
+\item{progress}{logical; show a progress bar over the sequential time
+indices. Default is \code{interactive()}.}
 }
 \value{
 long-format data.frame with simulated subject IDs, time, static
