@@ -2,6 +2,18 @@
 
 ## irxforge (development version)
 
+- [`sample_covariates_mice_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice_timevarying.md)
+  no longer scales with `max profile length x nrow(data)`. Each
+  transition step now draws donors only from observed transitions at
+  comparable time indices (positions within the subject’s profile),
+  widened to neighbouring indices until at least `min_donors` (default
+  `1000`) are available; donor pools are built once per time index and
+  reused across replicates. Datasets with at most `min_donors`
+  transitions behave as before, and `min_donors = Inf` restores the full
+  donor frame. A new `progress` argument (default
+  [`interactive()`](https://rdrr.io/r/base/interactive.html)) shows a
+  progress bar over the transition steps (#26).
+
 - [`anonymize_dataset()`](https://insightrx.github.io/irxforge/reference/anonymize_dataset.md):
   arguments passed through `...` are now validated up front against the
   time-varying sampler selected by `method` (and, for `"mice"` and

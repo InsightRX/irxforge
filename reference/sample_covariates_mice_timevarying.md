@@ -28,7 +28,9 @@ sample_covariates_mice_timevarying(
   cont_method = "pmm",
   replicates = 1,
   seed = NULL,
-  ...
+  ...,
+  min_donors = 1000,
+  progress = interactive()
 )
 ```
 
@@ -156,6 +158,25 @@ sample_covariates_mice_timevarying(
 
   additional arguments passed to the internal MICE implementation (e.g.
   `maxit`).
+
+- min_donors:
+
+  minimum number of observed transitions used as donors when imputing
+  each time index. Transitions are pooled by their time index (the
+  position of the row within its subject's profile): at time index `k`
+  the donor pool holds the transitions at index `k`, widened
+  symmetrically to neighbouring indices until it contains at least
+  `min_donors` rows. This keeps the cost of each step proportional to
+  the number of subjects still active at that index rather than to
+  `nrow(data)`, and restricts donors to transitions at comparable
+  positions in the profile. Default `1000`. When `data` has at most
+  `min_donors` transitions, every step uses all of them. Use `Inf` to
+  always use all observed transitions.
+
+- progress:
+
+  logical; show a progress bar over the sequential time indices. Default
+  is [`interactive()`](https://rdrr.io/r/base/interactive.html).
 
 ## Value
 
