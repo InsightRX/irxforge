@@ -66,7 +66,13 @@ categorical). Use this for numerically coded categorical covariates, e.g.
 \code{SEX = 0/1}, so they are not sampled as continuous values. They are
 returned with their original numeric codes. With \code{method = "mice"}, a
 warning is raised for numeric covariates that look like categorical codes
-(whole numbers with at most 3 distinct values) but are not listed here.}
+(whole numbers with at most 3 distinct values) but are not listed here.
+Categorical covariates (including factor and character columns) with
+more than 20 distinct values are rejected with an error reporting the
+level count of each categorical covariate: such a column is almost always
+a continuous one (e.g. a time, dose or occasion counter) passed as
+categorical by mistake, and would make the MICE sampler extremely slow.
+Pass \code{max_cat_levels} (through \code{...}) to raise this limit.}
 
 \item{loq}{optional numeric limit of quantification. Simulated observations
 below \code{loq} are handled according to \code{blq_method}.}

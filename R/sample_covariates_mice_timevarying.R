@@ -64,6 +64,13 @@
 #'   Default is 1. When greater than 1, a `.replicate` column is included.
 #' @param seed integer random seed passed to [set.seed()] for reproducibility.
 #'   Default `NULL` does not set a seed.
+#' @param max_cat_levels maximum number of distinct values allowed for a
+#'   categorical covariate (listed in `cat_covs`, or a factor/character
+#'   column). Default `20`. Covariates with more levels are rejected up front
+#'   with an error that reports the level count of each categorical covariate,
+#'   because they are almost always continuous columns passed as categorical by
+#'   mistake and make the polytomous imputation extremely slow. Use `Inf` to
+#'   disable.
 #' @param ... additional arguments passed to the internal MICE implementation
 #'   (e.g. `maxit`).
 #'
@@ -98,6 +105,7 @@ sample_covariates_mice_timevarying <- function(
   cont_method = "pmm",
   replicates = 1,
   seed = NULL,
+  max_cat_levels = 20,
   ...
 ) {
   if (!is.null(seed)) set.seed(seed)
@@ -186,6 +194,8 @@ sample_covariates_mice_timevarying <- function(
     )
   }
 
+  check_cat_covs_levels(data, covs, cat_covs, max_cat_levels)
+
   data <- data |>
     dplyr::arrange(.data[[id_var]], .data[[time_var]])
 
@@ -234,6 +244,7 @@ sample_covariates_mice_timevarying <- function(
       conditional = conditional,
       n_subjects = n_subjects,
       cont_method = cont_method,
+      max_cat_levels = max_cat_levels,
       ...
     )
 

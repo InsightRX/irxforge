@@ -715,3 +715,35 @@ test_that("integer-coded covariate warning is raised once per call", {
   )
   expect_length(grep("`SEX`", warnings), 1)
 })
+
+test_that("categorical covariates with too many levels are rejected up front", {
+  dat <- data.frame(
+    ID = rep(1:10, each = 3),
+    TIME = rep(c(0, 1, 2), times = 10),
+    PRT = seq(0.1, 3, by = 0.1),
+    WT = rep(seq(60, 78, by = 2), each = 3)
+  )
+  local_mocked_bindings(
+    sample_tv_baseline = function(...) stop("sampling should not be reached")
+  )
+  expect_error(
+    sample_covariates_mice_timevarying(
+      dat, time_varying_covs = c("PRT", "WT"), cat_covs = "PRT"
+    ),
+    "`PRT` \\(30 levels\\)",
+    class = "irxforge_cat_levels_error"
+  )
+  # the raised limit is forwarded to the baseline sampler
+  local_mocked_bindings(
+    sample_tv_baseline = function(..., max_cat_levels) {
+      stop("baseline max_cat_levels = ", max_cat_levels)
+    }
+  )
+  expect_error(
+    sample_covariates_mice_timevarying(
+      dat, time_varying_covs = c("PRT", "WT"), cat_covs = "PRT",
+      max_cat_levels = 30
+    ),
+    "baseline max_cat_levels = 30"
+  )
+})

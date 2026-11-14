@@ -426,6 +426,69 @@ warn_integer_coded_covariates <- function(data, covs, cat_covs = NULL) {
   invisible(suspicious)
 }
 
+#' Reject categorical covariates with implausibly many levels
+#'
+#' Each categorical covariate is imputed with a (multinomial) logistic
+#' regression, whose cost grows quickly with the number of levels. A
+#' categorical covariate with hundreds of levels is almost always a continuous
+#' column (e.g. a time or dose counter) passed in `cat_covs` by mistake, and
+#' would make the sampler run for hours without any output. Covariates listed
+#' in `cat_covs`, as well as factor and character columns (which are always
+#' treated as categorical), are checked against `max_cat_levels`.
+#'
+#' @param data data.frame with covariates
+#' @param covs names of the covariates to check
+#' @param cat_covs names of the covariates declared categorical
+#' @param max_cat_levels maximum number of distinct (non-missing) values
+#'   allowed for a categorical covariate. `Inf` disables the check.
+#' @returns named integer vector with the number of levels of each categorical
+#'   covariate, invisibly
+#' @keywords internal
+check_cat_covs_levels <- function(data, covs, cat_covs = NULL,
+                                  max_cat_levels = 20) {
+  if (!is.numeric(max_cat_levels) || length(max_cat_levels) != 1 ||
+      is.na(max_cat_levels) || max_cat_levels < 2) {
+    stop(
+      "`max_cat_levels` must be a single number of at least 2 (or `Inf`).",
+      call. = FALSE
+    )
+  }
+  covs <- intersect(covs, names(data))
+  is_cat <- vapply(covs, function(cov) {
+    cov %in% cat_covs || is.factor(data[[cov]]) || is.character(data[[cov]])
+  }, logical(1))
+  cat <- covs[is_cat]
+  n_levels <- vapply(cat, function(cov) {
+    x <- data[[cov]]
+    length(unique(x[!is.na(x)]))
+  }, integer(1))
+  names(n_levels) <- cat
+  too_many <- n_levels[n_levels > max_cat_levels]
+  if (length(too_many) > 0) {
+    stop(errorCondition(
+      paste0(
+        "Categorical covariate(s) with more than ", max_cat_levels,
+        " levels: ",
+        paste0("`", names(too_many), "` (", too_many, " levels)",
+               collapse = ", "),
+        ". Imputing a categorical covariate fits a multinomial regression ",
+        "per level, which becomes extremely slow with this many levels. ",
+        "This usually means a continuous column (e.g. a time, dose or ",
+        "occasion counter) was passed in `cat_covs`, or is stored as ",
+        "character/factor; treat it as continuous (convert it to numeric ",
+        "and remove it from `cat_covs`) or drop it from the covariates. ",
+        "If the covariate really is categorical, raise `max_cat_levels`. ",
+        "Levels per categorical covariate: ",
+        paste0("`", names(n_levels), "` = ", n_levels, collapse = ", "),
+        "."
+      ),
+      class = "irxforge_cat_levels_error",
+      call = NULL
+    ))
+  }
+  invisible(n_levels)
+}
+
 #' Draw parameters of a Bayesian logistic regression model
 #'
 #' Fits a logistic regression on data augmented with pseudo-observations

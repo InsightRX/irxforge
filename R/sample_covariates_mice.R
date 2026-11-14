@@ -26,6 +26,12 @@
 #' Default is 1.
 #' @param seed integer random seed passed to [set.seed()] for reproducibility.
 #' Default `NULL` does not set a seed.
+#' @param max_cat_levels maximum number of distinct values allowed for a
+#' categorical covariate (listed in `cat_covs`, or a factor/character column).
+#' Default `20`. Covariates with more levels are rejected up front with an
+#' error that reports the level count of each categorical covariate, because
+#' they are almost always continuous columns passed as categorical by mistake
+#' and make the polytomous imputation extremely slow. Use `Inf` to disable.
 #' @param ... additional arguments passed to the internal MICE implementation,
 #' e.g. `maxit` (number of iterations, default 5) or `donors` (number of
 #' donors for predictive mean matching, default 5).
@@ -50,6 +56,7 @@ sample_covariates_mice <- function(
   cont_method = c("pmm", "norm"),
   replicates = 1,
   seed = NULL,
+  max_cat_levels = 20,
   ...
 ) {
   cont_method <- match.arg(cont_method)
@@ -61,6 +68,7 @@ sample_covariates_mice <- function(
     cont_method = cont_method,
     replicates = replicates,
     seed = seed,
+    max_cat_levels = max_cat_levels,
     ...
   ))
 }
@@ -74,12 +82,14 @@ sample_covariates_mice_impl <- function(
   cont_method,
   replicates,
   seed,
+  max_cat_levels = 20,
   ...
 ) {
   if (!is.null(seed)) set.seed(seed)
 
   is_tbl <- tibble::is_tibble(data)
   data <- as.data.frame(data)
+  check_cat_covs_levels(data, names(data), cat_covs, max_cat_levels)
   warn_integer_coded_covariates(data, names(data), cat_covs)
   data[cat_covs] <- lapply(data[cat_covs], as.factor)
   rownames(data) <- NULL
