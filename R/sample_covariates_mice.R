@@ -56,8 +56,8 @@ sample_covariates_mice <- function(
   cont_method = c("pmm", "norm"),
   replicates = 1,
   seed = NULL,
-  max_cat_levels = 20,
-  ...
+  ...,
+  max_cat_levels = 20
 ) {
   cont_method <- match.arg(cont_method)
   dedupe_mice_warnings(sample_covariates_mice_impl(

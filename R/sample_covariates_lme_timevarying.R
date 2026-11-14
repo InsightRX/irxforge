@@ -132,8 +132,8 @@ sample_covariates_lme_timevarying <- function(
   cont_method = "pmm",
   replicates = 1,
   seed = NULL,
-  max_cat_levels = 20,
-  ...
+  ...,
+  max_cat_levels = 20
 ) {
   if (!is.null(seed)) set.seed(seed)
   trend <- match.arg(trend)

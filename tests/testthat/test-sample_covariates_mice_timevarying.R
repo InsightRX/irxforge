@@ -695,6 +695,175 @@ test_that("run_mice_simulation combines integer and factor categorical columns",
   expect_false(anyNA(out$WT))
 })
 
+test_that("transition data records the time index of each transition", {
+  dat <- data.frame(
+    ID = c(1, 1, 1, 2, 2),
+    TIME = c(0, 1, 2, 0, 3),
+    WT = c(70, 71, 72, 60, 61)
+  )
+  out <- make_mice_transition_data(
+    data = dat, id_var = "ID", time_var = "TIME",
+    static_covs = character(), time_varying_covs = "WT"
+  )
+  expect_equal(attr(out, "time_index"), c(2L, 3L, 2L))
+  expect_false(".mice_time_index" %in% names(out))
+})
+
+test_that("donor selection widens the time-index window to min_donors", {
+  # 10 transitions at index 2, 5 at index 3, 2 at index 4, 1 at index 10
+  idx <- c(rep(2L, 10), rep(3L, 5), rep(4L, 2), 10L)
+  td <- data.frame(WT = seq_along(idx))
+
+  # small frames use all transitions
+  expect_null(select_mice_transition_donors(idx, td, 2, 18, "WT"))
+  expect_null(select_mice_transition_donors(idx, td, 2, Inf, "WT"))
+
+  expect_equal(select_mice_transition_donors(idx, td, 2, 8, "WT"), 1:10)
+  expect_equal(select_mice_transition_donors(idx, td, 3, 5, "WT"), 11:15)
+  # index 4 has only 2 transitions: widen to indices 3-5
+  expect_equal(select_mice_transition_donors(idx, td, 4, 5, "WT"), 11:17)
+  # indices beyond the observed profiles start from the nearest observed index
+  expect_equal(select_mice_transition_donors(idx, td, 25, 1, "WT"), 18L)
+  # a sparse tail widens over empty indices until enough donors are found
+  expect_equal(select_mice_transition_donors(idx, td, 10, 3, "WT"), 16:18)
+  # window covering every index falls back to the full frame
+  expect_null(select_mice_transition_donors(idx, td, 10, 12, "WT"))
+})
+
+test_that("donor selection widens until every covariate has observed values", {
+  idx <- c(rep(2L, 5), rep(3L, 5))
+  td <- data.frame(
+    WT = 1:10,
+    SCR = c(rep(NA, 5), 1:5)
+  )
+  expect_equal(select_mice_transition_donors(idx, td, 2, 2, "WT"), 1:5)
+  expect_null(select_mice_transition_donors(idx, td, 2, 2, c("WT", "SCR")))
+})
+
+test_that("each transition step only receives donors near its time index", {
+  # one long subject and many short ones
+  dat <- rbind(
+    data.frame(ID = 1, TIME = 0:19, WT = 70 + 0:19),
+    data.frame(
+      ID = rep(2:41, each = 3),
+      TIME = rep(0:2, times = 40),
+      WT = rep(60:99, each = 3)
+    )
+  )
+  donor_rows <- integer()
+  local_mocked_bindings(
+    impute_mice_transition_step = function(transition_data, current, time_varying_covs, ...) {
+      donor_rows <<- c(donor_rows, nrow(transition_data))
+      current[time_varying_covs]
+    }
+  )
+  out <- sample_covariates_mice_timevarying(
+    data = dat,
+    time_varying_covs = "WT",
+    baseline_method = "bootstrap",
+    min_donors = 10,
+    seed = 1
+  )
+  expect_equal(nrow(out), nrow(dat))
+  # step 2 and 3: the 41 transitions at that index; later steps: a window
+  # around the long subject's index holding at least 10 transitions
+  expect_equal(donor_rows[1:2], c(41, 41))
+  expect_true(all(donor_rows[-(1:2)] >= 10))
+  expect_true(all(donor_rows < nrow(dat) - 41))
+
+  # min_donors = Inf always uses the full transition frame
+  donor_rows <- integer()
+  sample_covariates_mice_timevarying(
+    data = dat,
+    time_varying_covs = "WT",
+    baseline_method = "bootstrap",
+    min_donors = Inf,
+    seed = 1
+  )
+  expect_true(all(donor_rows == nrow(dat) - 41))
+})
+
+test_that("real mice path with a donor window returns valid covariates", {
+  set.seed(2)
+  dat <- do.call(rbind, lapply(1:40, function(i) {
+    n <- if (i == 1) 25 else sample(3:6, 1)
+    data.frame(
+      ID = i,
+      TIME = seq(0, by = 24, length.out = n),
+      SEX = sample(c(0, 1), 1),
+      CRCL = 80 + cumsum(stats::rnorm(n, 0, 5))
+    )
+  }))
+  out <- sample_covariates_mice_timevarying(
+    data = dat,
+    static_covs = "SEX",
+    time_varying_covs = "CRCL",
+    cat_covs = "SEX",
+    measurement_pattern = "all",
+    baseline_method = "bootstrap",
+    min_donors = 20,
+    seed = 3
+  )
+  expect_equal(nrow(out), nrow(dat))
+  expect_false(anyNA(out$CRCL))
+})
+
+test_that("progress = TRUE reports progress over transition steps", {
+  dat <- data.frame(
+    ID = rep(1:3, each = 3),
+    TIME = rep(0:2, times = 3),
+    WT = c(70, 71, 72, 60, 61, 62, 80, 81, 82)
+  )
+  local_mocked_bindings(
+    impute_mice_transition_step = function(current, time_varying_covs, ...) {
+      current[time_varying_covs]
+    }
+  )
+  bar <- utils::capture.output(
+    expect_message(
+      sample_covariates_mice_timevarying(
+        data = dat, time_varying_covs = "WT",
+        baseline_method = "bootstrap", progress = TRUE
+      ),
+      "2 transition steps"
+    ),
+    type = "message"
+  )
+  expect_true(any(grepl("100%", bar)))
+  expect_silent(
+    sample_covariates_mice_timevarying(
+      data = dat, time_varying_covs = "WT",
+      baseline_method = "bootstrap", progress = FALSE
+    )
+  )
+})
+
+test_that("invalid min_donors and progress are rejected", {
+  dat <- data.frame(ID = rep(1:2, each = 2), TIME = rep(0:1, 2), WT = 1:4)
+  expect_error(
+    sample_covariates_mice_timevarying(dat, time_varying_covs = "WT", min_donors = 0),
+    "min_donors"
+  )
+  expect_error(
+    sample_covariates_mice_timevarying(dat, time_varying_covs = "WT", progress = NA),
+    "progress"
+  )
+})
+
+test_that("new arguments do not shift existing positional arguments", {
+  args <- names(formals(sample_covariates_mice_timevarying))
+  expect_equal(
+    args[seq_len(which(args == "..."))],
+    c(
+      "data", "id_var", "time_var", "time_grid", "static_covs",
+      "time_varying_covs", "cat_covs", "measurement_pattern", "design_match",
+      "design_match_covs", "design_id_var", "n_subjects", "baseline_method",
+      "noise", "conditional", "cont_method", "replicates", "seed", "..."
+    )
+  )
+  expect_equal(args[-seq_len(which(args == "..."))], c("max_cat_levels", "min_donors", "progress"))
+})
+
 test_that("integer-coded covariate warning is raised once per call", {
   set.seed(1)
   dat <- data.frame(
