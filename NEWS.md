@@ -8,6 +8,14 @@
   replicates. Datasets with at most `min_donors` transitions behave as before, and
   `min_donors = Inf` restores the full donor frame. A new `progress` argument (default
   `interactive()`) shows a progress bar over the transition steps (#26).
+* `anonymize_dataset()`: arguments passed through `...` are now validated up
+  front against the time-varying sampler selected by `method` (and, for `"mice"`
+  and `"lme"`, the internal MICE implementation). Unknown names (typos, or
+  arguments added in a newer irxforge release) fail with "unused argument `x` ...
+  not supported by this build of irxforge (<version>)", and arguments that
+  `anonymize_dataset()` sets itself (e.g. `id_var`, `n_subjects`) are rejected,
+  instead of surfacing deep in the call stack as "formal argument ... matched by
+  multiple actual arguments" or being silently ignored (#29).
 * `anonymize_dataset()`: `model_file` is no longer passed to FeRx verbatim. The
   simulation runs on a temporary copy adapted to the anonymized dataset: the
   `[data_selection]` and deprecated `[initial_values]` blocks are removed, `[data] path`

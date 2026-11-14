@@ -4,7 +4,7 @@
 \alias{mice_norm_draw}
 \title{Draw parameters of a Bayesian linear regression model}
 \usage{
-mice_norm_draw(y, X, ridge = 1e-05)
+mice_norm_draw(y, X, ridge = 1e-05, var = NULL)
 }
 \arguments{
 \item{y}{numeric outcome vector (observed values)}
@@ -13,6 +13,8 @@ mice_norm_draw(y, X, ridge = 1e-05)
 
 \item{ridge}{ridge penalty used in the linear regression draws, to stabilize
 the estimation in case of collinear predictors.}
+
+\item{var}{name of the variable being imputed, used in messages.}
 }
 \value{
 list with least-squares estimate \code{coef}, drawn coefficients \code{beta}
@@ -20,5 +22,14 @@ and drawn residual standard deviation \code{sigma}
 }
 \description{
 Following Rubin (1987, p. 167), as implemented in \code{mice:::.norm.draw()}.
+}
+\details{
+The penalized normal equations are solved on the correlation scale (the
+columns of \code{X} scaled to unit root-mean-square), which is mathematically
+identical to applying the ridge penalty \code{ridge * diag(crossprod(X))} but
+prevents predictors on very different scales from making the system
+numerically singular. If the system is still singular (e.g. because of
+(near-)collinear predictors), a pseudo-inverse is used instead and a warning
+naming the imputed variable and the collinear predictors is raised.
 }
 \keyword{internal}

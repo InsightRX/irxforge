@@ -54,7 +54,9 @@ rows and p columns
 \description{
 In contrast to sampling methods bootstrap and NHANES, categorical covariates
 need to be specified using the \code{cat_covs} argument, otherwise they will be
-treated as continuous.
+treated as continuous. A warning is raised for numeric covariates that look
+like categorical codes (whole numbers with at most 3 distinct values, e.g.
+\code{SEX = 0/1}) but are not listed in \code{cat_covs}.
 }
 \details{
 missing values in \code{data} must be coded as NA.

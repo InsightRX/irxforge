@@ -20,7 +20,9 @@
 #'   timepoint. Default is all columns except `id_var`, `time_var`, and
 #'   `static_covs`.
 #' @param cat_covs character vector containing categorical covariates among
-#'   `static_covs` and `time_varying_covs`.
+#'   `static_covs` and `time_varying_covs`. A warning is raised for numeric
+#'   covariates that look like categorical codes (whole numbers with at most 3
+#'   distinct values, e.g. `SEX = 0/1`) but are not listed here.
 #' @param measurement_pattern how to determine when a time-varying covariate
 #'   receives a new measurement in the sampled observed profile. `"change"`
 #'   (default) treats a covariate as newly measured when its value changes from
@@ -241,6 +243,8 @@ sample_covariates_mice_timevarying <- function(
     )
   }
 
+  warn_integer_coded_covariates(data, covs, cat_covs)
+
   transition_index <- attr(transition_data, "time_index")
   attr(transition_data, "time_index") <- NULL
   # donor pools depend only on the time index, so build each one once and reuse
@@ -266,7 +270,8 @@ sample_covariates_mice_timevarying <- function(
   }
 
   out <- vector("list", replicates)
-  for (replicate_idx in seq_len(replicates)) {
+  # emit each collinearity warning once, not once per transition step
+  dedupe_mice_warnings(for (replicate_idx in seq_len(replicates)) {
     baseline <- sample_tv_baseline(
       baseline_data = baseline_data,
       baseline_method = baseline_method,
@@ -415,7 +420,7 @@ sample_covariates_mice_timevarying <- function(
     if (replicates > 1) {
       out[[replicate_idx]][[".replicate"]] <- replicate_idx
     }
-  }
+  })
 
   out <- dplyr::bind_rows(out)
   if (tibble::is_tibble(data)) out <- tibble::as_tibble(out)

@@ -50,7 +50,9 @@ timepoint. Default is all columns except \code{id_var}, \code{time_var}, and
 \code{static_covs}.}
 
 \item{cat_covs}{character vector containing categorical covariates among
-\code{static_covs} and \code{time_varying_covs}.}
+\code{static_covs} and \code{time_varying_covs}. A warning is raised for numeric
+covariates that look like categorical codes (whole numbers with at most 3
+distinct values, e.g. \code{SEX = 0/1}) but are not listed here.}
 
 \item{measurement_pattern}{how to determine when a time-varying covariate
 receives a new measurement in the sampled observed profile. \code{"change"}

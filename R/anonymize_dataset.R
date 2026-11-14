@@ -40,7 +40,9 @@
 #'   addition to factor and character covariates (which are always treated as
 #'   categorical). Use this for numerically coded categorical covariates, e.g.
 #'   `SEX = 0/1`, so they are not sampled as continuous values. They are
-#'   returned with their original numeric codes.
+#'   returned with their original numeric codes. With `method = "mice"`, a
+#'   warning is raised for numeric covariates that look like categorical codes
+#'   (whole numbers with at most 3 distinct values) but are not listed here.
 #' @param loq optional numeric limit of quantification. Simulated observations
 #'   below `loq` are handled according to `blq_method`.
 #' @param blq_method how to handle simulated observations below `loq`.
@@ -77,8 +79,15 @@
 #' @param seed optional integer seed used for covariate sampling and FeRx
 #'   simulation. `NULL` (default) does not seed, so each call draws
 #'   independently.
-#' @param ... additional arguments passed to
-#'   [sample_covariates_mice_timevarying()].
+#' @param ... additional arguments passed to the time-varying sampler selected
+#'   by `method` ([sample_covariates_mice_timevarying()],
+#'   [sample_covariates_lme_timevarying()] or
+#'   [sample_covariates_copulas_timevarying()]) and, for `"mice"` and `"lme"`,
+#'   on to the internal MICE implementation (e.g. `maxit`). Every argument must
+#'   be named and accepted by that sampler. Unknown names (typos, or arguments
+#'   added in a newer irxforge release) and arguments that
+#'   `anonymize_dataset()` sets itself (e.g. `id_var`, `n_subjects`) are
+#'   rejected up front with an "unused argument" error.
 #'
 #' @returns anonymized NONMEM-style data.frame, with one block of records per
 #'   anonymized subject (`ID` `1:n`). Each block is a clone of one observed
@@ -133,7 +142,12 @@ anonymize_dataset <- function(
       is.na(n_candidates) || n_candidates < 1 || n_candidates != round(n_candidates)) {
     stop("`n_candidates` must be a single positive integer.", call. = FALSE)
   }
-  replicates <- list(...)[["replicates"]]
+  # validate the `...` names before any of them is evaluated, so an unknown
+  # argument is reported as such even if evaluating it would fail
+  dots <- as.list(match.call(expand.dots = FALSE)$...)
+  check_anonymize_dots(names(dots), n_dots = length(dots), method = method)
+  # force only `replicates` (if supplied), leaving other promises untouched
+  replicates <- (function(..., replicates = NULL) replicates)(...)
   if (!is.null(replicates) && !identical(as.numeric(replicates), 1)) {
     stop(
       "`replicates` is not supported by `anonymize_dataset()`: each call ",
@@ -219,6 +233,81 @@ anonymize_dataset <- function(
   attr(result, "design_map") <- attr(selected$data, "design_map")
   attr(result, "similarity_score") <- selected$score
   result
+}
+
+#' Validate the names of the `...` arguments of [anonymize_dataset()]
+#'
+#' `...` is forwarded through several internal functions to the time-varying
+#' sampler selected by `method` (and, for MICE/LME, on to [mice_impute()]).
+#' Without an up-front check, a misspelled or unsupported argument either
+#' vanishes silently or surfaces deep in the call stack as a confusing error
+#' such as "formal argument ... matched by multiple actual arguments". This
+#' rejects unnamed arguments, arguments `anonymize_dataset()` already sets
+#' itself, and arguments the selected sampler does not accept.
+#'
+#' @param dot_names names of the `...` arguments (`NULL` if none are named).
+#' @param n_dots number of `...` arguments.
+#' @param method the selected sampler (`"mice"`, `"lme"` or `"copulas"`).
+#'
+#' @noRd
+check_anonymize_dots <- function(dot_names, n_dots, method) {
+  if (n_dots == 0) {
+    return(invisible(NULL))
+  }
+  if (length(dot_names) != n_dots || any(is.na(dot_names) | dot_names == "")) {
+    stop(
+      "All arguments passed to `anonymize_dataset()` through `...` must be named.",
+      call. = FALSE
+    )
+  }
+  # arguments anonymize_dataset() passes to the sampler (or to mice_impute())
+  # itself; supplying them again through `...` would clash
+  reserved <- c(
+    "data", "id_var", "time_var", "time_varying_covs", "cat_covs",
+    "design_match", "design_match_covs", "design_id_var", "n_subjects", "seed",
+    "method", "m"
+  )
+  sampler <- switch(
+    method,
+    mice = sample_covariates_mice_timevarying,
+    lme = sample_covariates_lme_timevarying,
+    copulas = sample_covariates_copulas_timevarying
+  )
+  accepted <- names(formals(sampler))
+  # MICE and LME forward their own `...` to the internal MICE implementation
+  if (method %in% c("mice", "lme")) {
+    accepted <- c(accepted, names(formals(mice_impute)))
+  }
+  accepted <- setdiff(accepted, c("...", reserved))
+
+  shadowing <- unique(intersect(dot_names, reserved))
+  if (length(shadowing) > 0) {
+    stop(
+      "Cannot pass ", paste0("`", shadowing, "`", collapse = ", "),
+      " to `anonymize_dataset()` through `...`: ",
+      if (length(shadowing) == 1) "it is" else "they are",
+      " set by `anonymize_dataset()` itself.",
+      call. = FALSE
+    )
+  }
+  unknown <- unique(setdiff(dot_names, accepted))
+  if (length(unknown) > 0) {
+    version <- tryCatch(
+      as.character(utils::packageVersion("irxforge")),
+      error = function(e) "unknown version"
+    )
+    stop(
+      "unused argument", if (length(unknown) > 1) "s", " ",
+      paste0("`", unknown, "`", collapse = ", "),
+      " in `anonymize_dataset()`: not supported by this build of irxforge (",
+      version, ") with `method = \"", method, "\"`. Check the spelling, or ",
+      "update irxforge if ", if (length(unknown) > 1) "these were" else "it was",
+      " added in a newer version. Arguments accepted through `...`: ",
+      paste0("`", accepted, "`", collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+  invisible(NULL)
 }
 
 #' Draw one time-varying covariate candidate with the chosen sampler
