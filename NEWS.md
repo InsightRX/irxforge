@@ -7,12 +7,24 @@
   case-sensitively. The model's covariate references are checked before any
   covariate is sampled: a reference that matches several columns
   case-insensitively fails with an error naming the columns, and a reference to
-  a column of `data` that is not in `covariates` raises a warning, instead of
-  the simulation failing partway through with `E_MISSING_COVARIATE`. FeRx
-  grammar words (e.g. the `pk` keyword) and ODE state names are not treated as
+  a column of `data` in neither `covariates` nor `design_cols` raises a warning,
+  instead of the simulation failing partway through with `E_MISSING_COVARIATE`.
+  FeRx grammar words (e.g. the `pk` keyword) and ODE state names are not treated as
   covariate references, and a column the model references under its exact
   spelling is never renamed (#43).
-
+* `anonymize_dataset()`: new `design_cols` argument for study-design columns
+  (e.g. `DVID`, `OCC`, L2 `PAIR` indices, carried dose history, model row filters)
+  that are cloned verbatim from the matched source design instead of being dropped
+  or resampled. They are present in the data handed to `ferx_simulate()`, so models
+  that reference them can be simulated, and are kept in the returned dataset.
+* `sample_covariates_mice_timevarying()` no longer scales with
+  `max profile length x nrow(data)`. Each transition step now draws donors only from
+  observed transitions at comparable time indices (positions within the subject's
+  profile), widened to neighbouring indices until at least `min_donors` (default
+  `1000`) are available; donor pools are built once per time index and reused across
+  replicates. Datasets with at most `min_donors` transitions behave as before, and
+  `min_donors = Inf` restores the full donor frame. A new `progress` argument (default
+  `interactive()`) shows a progress bar over the transition steps (#26).
 * `anonymize_dataset()`: arguments passed through `...` are now validated up
   front against the time-varying sampler selected by `method` (and, for `"mice"`
   and `"lme"`, the internal MICE implementation). Unknown names (typos, or

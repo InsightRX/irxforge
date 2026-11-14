@@ -64,8 +64,27 @@
 #'   Default is 1. When greater than 1, a `.replicate` column is included.
 #' @param seed integer random seed passed to [set.seed()] for reproducibility.
 #'   Default `NULL` does not set a seed.
+#' @param max_cat_levels maximum number of distinct values allowed for a
+#'   categorical covariate (listed in `cat_covs`, or a factor/character
+#'   column). Default `20`. Covariates with more levels are rejected up front
+#'   with an error that reports the level count of each categorical covariate,
+#'   because they are almost always continuous columns passed as categorical by
+#'   mistake and make the polytomous imputation extremely slow. Use `Inf` to
+#'   disable.
 #' @param ... additional arguments passed to the internal MICE implementation
 #'   (e.g. `maxit`).
+#' @param min_donors minimum number of observed transitions used as donors
+#'   when imputing each time index. Transitions are pooled by their time index
+#'   (the position of the row within its subject's profile): at time index `k`
+#'   the donor pool holds the transitions at index `k`, widened symmetrically to
+#'   neighbouring indices until it contains at least `min_donors` rows. This
+#'   keeps the cost of each step proportional to the number of subjects still
+#'   active at that index rather than to `nrow(data)`, and restricts donors to
+#'   transitions at comparable positions in the profile. Default `1000`. When
+#'   `data` has at most `min_donors` transitions, every step uses all of them.
+#'   Use `Inf` to always use all observed transitions.
+#' @param progress logical; show a progress bar over the sequential time
+#'   indices. Default is `interactive()`.
 #'
 #' @details
 #' This function implements a first-order empirical transition sampler:
@@ -98,7 +117,10 @@ sample_covariates_mice_timevarying <- function(
   cont_method = "pmm",
   replicates = 1,
   seed = NULL,
-  ...
+  ...,
+  max_cat_levels = 20,
+  min_donors = 1000,
+  progress = interactive()
 ) {
   if (!is.null(seed)) set.seed(seed)
   measurement_pattern <- match.arg(measurement_pattern)
@@ -134,6 +156,13 @@ sample_covariates_mice_timevarying <- function(
   }
   if (n_subjects < 1) {
     stop("`n_subjects` must be at least 1.", call. = FALSE)
+  }
+  if (length(min_donors) != 1 || !is.numeric(min_donors) ||
+      is.na(min_donors) || min_donors < 1) {
+    stop("`min_donors` must be a single number of at least 1.", call. = FALSE)
+  }
+  if (length(progress) != 1 || !is.logical(progress) || is.na(progress)) {
+    stop("`progress` must be TRUE or FALSE.", call. = FALSE)
   }
 
   if (is.null(static_covs)) {
@@ -186,6 +215,8 @@ sample_covariates_mice_timevarying <- function(
     )
   }
 
+  check_cat_covs_levels(data, covs, cat_covs, max_cat_levels)
+
   data <- data |>
     dplyr::arrange(.data[[id_var]], .data[[time_var]])
 
@@ -224,6 +255,30 @@ sample_covariates_mice_timevarying <- function(
 
   warn_integer_coded_covariates(data, covs, cat_covs)
 
+  transition_index <- attr(transition_data, "time_index")
+  attr(transition_data, "time_index") <- NULL
+  # donor pools depend only on the time index, so build each one once and reuse
+  # it across replicates
+  donor_cache <- list()
+  get_donors <- function(time_idx) {
+    key <- as.character(time_idx)
+    if (is.null(donor_cache[[key]])) {
+      rows <- select_mice_transition_donors(
+        transition_index = transition_index,
+        transition_data = transition_data,
+        time_idx = time_idx,
+        min_donors = min_donors,
+        time_varying_covs = time_varying_covs
+      )
+      donor_cache[[key]] <<- if (is.null(rows)) {
+        transition_data
+      } else {
+        transition_data[rows, , drop = FALSE]
+      }
+    }
+    donor_cache[[key]]
+  }
+
   out <- vector("list", replicates)
   # emit each collinearity warning once, not once per transition step
   dedupe_mice_warnings(for (replicate_idx in seq_len(replicates)) {
@@ -234,6 +289,7 @@ sample_covariates_mice_timevarying <- function(
       conditional = conditional,
       n_subjects = n_subjects,
       cont_method = cont_method,
+      max_cat_levels = max_cat_levels,
       ...
     )
 
@@ -299,6 +355,17 @@ sample_covariates_mice_timevarying <- function(
     replicate_rows[[1]] <- current
 
     if (length(replicate_rows) > 1) {
+      pb <- NULL
+      if (progress) {
+        message(
+          "Sampling time-varying covariates",
+          if (replicates > 1) paste0(" (replicate ", replicate_idx, "/", replicates, ")"),
+          ": ", length(replicate_rows) - 1, " transition steps"
+        )
+        pb <- utils::txtProgressBar(
+          min = 1, max = length(replicate_rows), style = 3, file = stderr()
+        )
+      }
       for (time_idx in 2:length(replicate_rows)) {
         active_subjects <- which(profile_lengths >= time_idx)
         active_current <- current[active_subjects, , drop = FALSE]
@@ -322,7 +389,7 @@ sample_covariates_mice_timevarying <- function(
 
         if (any(active_update)) {
           next_covs <- impute_mice_transition_step(
-            transition_data = transition_data,
+            transition_data = get_donors(time_idx),
             current = active_current,
             time = active_time,
             previous_time = active_previous_time,
@@ -349,7 +416,9 @@ sample_covariates_mice_timevarying <- function(
         active_current[[time_var]] <- active_time
         current[active_subjects, ] <- active_current
         replicate_rows[[time_idx]] <- active_current
+        if (!is.null(pb)) utils::setTxtProgressBar(pb, time_idx)
       }
+      if (!is.null(pb)) close(pb)
     }
 
     out[[replicate_idx]] <- apply_timevarying_noise(
@@ -569,10 +638,11 @@ make_mice_transition_data <- function(
 ) {
   lag_covs <- paste0(".", time_varying_covs, "_lag")
 
-  data |>
+  out <- data |>
     dplyr::group_by(.data[[id_var]]) |>
     dplyr::arrange(.data[[time_var]], .by_group = TRUE) |>
     dplyr::mutate(
+      .mice_time_index = dplyr::row_number(),
       .previous_time = dplyr::lag(.data[[time_var]]),
       .delta_time = .data[[time_var]] - .data$.previous_time
     ) |>
@@ -584,10 +654,72 @@ make_mice_transition_data <- function(
       )
     ) |>
     dplyr::ungroup() |>
-    dplyr::filter(!is.na(.data$.previous_time)) |>
+    dplyr::filter(!is.na(.data$.previous_time))
+  time_index <- out$.mice_time_index
+  out <- out |>
     dplyr::select(
       dplyr::all_of(c(time_var, ".delta_time", static_covs, lag_covs, time_varying_covs))
     )
+  # time index (position within the subject's profile) of each transition's
+  # target row, used to pool donors at comparable profile positions
+  attr(out, "time_index") <- time_index
+  out
+}
+
+#' Select donor transitions for one time index
+#'
+#' Returns the rows of `transition_data` whose time index lies within a window
+#' `[time_idx - d, time_idx + d]`, with `d` the smallest half-width such that the
+#' window holds at least `min_donors` transitions and every time-varying
+#' covariate has at least one observed value. Returns `NULL` when that window
+#' would cover all transitions, signalling that the full frame should be used.
+#'
+#' @param transition_index integer time index of each row of `transition_data`.
+#' @param transition_data transition frame from `make_mice_transition_data()`.
+#' @param time_idx time index being imputed.
+#' @param min_donors minimum number of donor transitions.
+#' @param time_varying_covs covariates that must have observed donor values.
+#' @returns integer row indices, or `NULL` for all rows.
+#' @noRd
+select_mice_transition_donors <- function(
+  transition_index,
+  transition_data,
+  time_idx,
+  min_donors,
+  time_varying_covs
+) {
+  n <- length(transition_index)
+  if (n <= min_donors) {
+    return(NULL)
+  }
+  lo_all <- min(transition_index)
+  hi_all <- max(transition_index)
+  # nothing observed at or near `time_idx` (e.g. a `time_grid` longer than any
+  # observed profile): start the window at the nearest observed index
+  centre <- min(max(time_idx, lo_all), hi_all)
+  counts <- tabulate(transition_index, nbins = hi_all)
+  cum <- cumsum(counts)
+  window_count <- function(lo, hi) cum[hi] - if (lo > 1) cum[lo - 1] else 0
+  d <- 0
+  repeat {
+    lo <- max(centre - d, lo_all)
+    hi <- min(centre + d, hi_all)
+    if (lo == lo_all && hi == hi_all) {
+      return(NULL)
+    }
+    if (window_count(lo, hi) >= min_donors) {
+      rows <- which(transition_index >= lo & transition_index <= hi)
+      observed <- vapply(
+        time_varying_covs,
+        function(cov) any(!is.na(transition_data[[cov]][rows])),
+        logical(1)
+      )
+      if (all(observed)) {
+        return(rows)
+      }
+    }
+    d <- d + 1
+  }
 }
 
 impute_mice_transition_step <- function(

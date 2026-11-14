@@ -19,6 +19,7 @@ anonymize_dataset(
   similarity = c("energy"),
   score_on = c("concentration", "covariate"),
   seed = NULL,
+  design_cols = NULL,
   ...
 )
 }
@@ -51,8 +52,8 @@ spelling that differs only by case from its column (e.g. \code{CONC0} for a
 \code{conc0} column) and the \verb{[data]} block does not map it, a rename such as
 \code{CONC0 = conc0} is added. This is checked before any covariate is sampled:
 a reference that matches several columns case-insensitively is an error,
-and a reference to a column of \code{data} that is not in \code{covariates} raises a
-warning. A relative \verb{[priors]} \code{from_fit} path is
+and a reference to a column of \code{data} that is in neither \code{covariates} nor
+\code{design_cols} raises a warning. A relative \verb{[priors]} \code{from_fit} path is
 made absolute against the directory of \code{model_file}, so it keeps resolving
 from the copy. Comments (\verb{#} and \verb{//}) are handled as FeRx handles them.}
 
@@ -73,7 +74,13 @@ categorical). Use this for numerically coded categorical covariates, e.g.
 \code{SEX = 0/1}, so they are not sampled as continuous values. They are
 returned with their original numeric codes. With \code{method = "mice"}, a
 warning is raised for numeric covariates that look like categorical codes
-(whole numbers with at most 3 distinct values) but are not listed here.}
+(whole numbers with at most 3 distinct values) but are not listed here.
+Categorical covariates (including factor and character columns) with
+more than 20 distinct values are rejected with an error reporting the
+level count of each categorical covariate: such a column is almost always
+a continuous one (e.g. a time, dose or occasion counter) passed as
+categorical by mistake, and would make the MICE sampler extremely slow.
+Pass \code{max_cat_levels} (through \code{...}) to raise this limit.}
 
 \item{loq}{optional numeric limit of quantification. Simulated observations
 below \code{loq} are handled according to \code{blq_method}.}
@@ -117,6 +124,19 @@ run only once, on the selected covariate sample.}
 \item{seed}{optional integer seed used for covariate sampling and FeRx
 simulation. \code{NULL} (default) does not seed, so each call draws
 independently.}
+
+\item{design_cols}{optional character vector of study-design columns to
+carry through verbatim from the matched source design, e.g. analyte or
+readout selectors (\code{DVID}), occasion indices for IOV (\code{OCC}), L2 pairing
+indices (\code{PAIR}), carried dose history (\code{TLST}, \code{LASTDOSE}) or row filters
+used by the model (\code{FLAG}). Unlike \code{covariates}, these columns are never
+resampled, imputed or rounded: each anonymized subject receives the values
+of the observed subject whose dosing/observation design it clones, record by
+record. They are included in the data passed to the FeRx simulation, so the
+model can reference them, and in the returned dataset. Must not overlap with
+\code{covariates} or the mapped \code{ID}, \code{EVID}, \code{AMT}, \code{TIME}, \code{DV} and \code{RATE}
+columns. Columns already carried through as part of the event design (\code{CMT},
+\code{MDV}, \code{ADDL}, \code{II}, \code{SS}) are accepted and kept as usual.}
 
 \item{...}{additional arguments passed to the time-varying sampler selected
 by \code{method} (\code{\link[=sample_covariates_mice_timevarying]{sample_covariates_mice_timevarying()}},

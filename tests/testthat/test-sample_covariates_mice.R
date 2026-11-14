@@ -189,3 +189,37 @@ test_that("warns about integer-coded covariates not declared in cat_covs", {
     sample_covariates_mice(dat, cat_covs = c("SEX", "FED"), n_subjects = 5, seed = 1)
   )
 })
+
+test_that("a cat_covs entry with implausibly many levels is rejected up front", {
+  set.seed(1)
+  dat <- data.frame(
+    PRT = round(runif(200, 0, 500), 2),
+    SEX = rep(0:1, 100),
+    WT = rnorm(200, 70, 10)
+  )
+  local_mocked_bindings(
+    run_mice_simulation = function(...) stop("imputation should not be reached")
+  )
+  expect_error(
+    sample_covariates_mice(dat, cat_covs = c("PRT", "SEX")),
+    "`PRT` \\(\\d+ levels\\)",
+    class = "irxforge_cat_levels_error"
+  )
+})
+
+test_that("max_cat_levels raises the limit for categorical covariates", {
+  set.seed(1)
+  dat <- data.frame(
+    GRP = rep(1:25, 4),
+    WT = rnorm(100, 70, 10)
+  )
+  expect_error(
+    sample_covariates_mice(dat, cat_covs = "GRP", seed = 1),
+    class = "irxforge_cat_levels_error"
+  )
+  out <- sample_covariates_mice(
+    dat, cat_covs = "GRP", seed = 1, max_cat_levels = 25, maxit = 1
+  )
+  expect_equal(nrow(out), 100)
+  expect_true(all(as.character(out$GRP) %in% as.character(1:25)))
+})

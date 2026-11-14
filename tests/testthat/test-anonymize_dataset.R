@@ -830,6 +830,175 @@ test_that("anonymize_dataset accepts an empty covariate set", {
   )
 })
 
+test_that("design_cols are cloned verbatim from the matched design", {
+  dat <- data.frame(
+    SUBJ = c("A", "A", "A", "B", "B", "B"),
+    TAD = c(0, 1, 2, 0, 1, 2),
+    EVENT = c(1, 0, 0, 1, 0, 0),
+    DOSE = c(100, 0, 0, 200, 0, 0),
+    CONC = c(0, 4, 3, 0, 8, 6),
+    WT = c(70, 70, 71, 80, 80, 81),
+    DVID = c(0, 1, 2, 0, 2, 1),
+    OCC = c(1, 1, 2, 1, 2, 2),
+    TLST = c(0, 0, 0, 0, 0, 0.12345678),
+    PATIENT_NAME = c("Ann", "Ann", "Ann", "Bob", "Bob", "Bob")
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  sampled_covs <- NULL
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(data, time_varying_covs, ...) {
+      # design columns are not handed to the covariate sampler
+      expect_false(any(c("DVID", "OCC", "TLST") %in% names(data)))
+      expect_equal(time_varying_covs, "WT")
+      data.frame(
+        SUBJ = c(1, 1, 1, 2, 2, 2),
+        .design_id = c("B", "B", "B", "A", "A", "A"),
+        TAD = c(0, 1, 2, 0, 1, 2),
+        WT = c(75, 76, 76, 65, 65, 66)
+      )
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      # design columns reach the simulation input, cloned from the matched design
+      expect_equal(data$DVID, c(0, 2, 1, 0, 1, 2))
+      expect_equal(data$OCC, c(1, 2, 2, 1, 1, 2))
+      expect_equal(data$TLST, c(0, 0, 0.12345678, 0, 0, 0))
+      data.frame(ID = c(1, 1, 2, 2), TIME = c(1, 2, 1, 2), DV_SIM = c(7, 8, 3, 4))
+    }
+  )
+
+  out <- anonymize_dataset(
+    data = dat,
+    covariates = "WT",
+    design_cols = c("DVID", "OCC", "TLST"),
+    model_file = model,
+    dictionary = list(ID = "SUBJ", TIME = "TAD", EVID = "EVENT", AMT = "DOSE", DV = "CONC"),
+    sigdig = 2
+  )
+
+  expect_named(out, c("ID", "TIME", "EVID", "AMT", "DV", "DVID", "OCC", "TLST", "WT"))
+  expect_false("PATIENT_NAME" %in% names(out))
+  expect_equal(out$DVID, c(0, 2, 1, 0, 1, 2))
+  expect_equal(out$OCC, c(1, 2, 2, 1, 1, 2))
+  # design columns are not rounded by `sigdig`
+  expect_equal(out$TLST, c(0, 0, 0.12345678, 0, 0, 0))
+  expect_equal(out$DV, c(0, 7, 8, 0, 3, 4))  # the design map still records which source design each subject cloned
+  expect_equal(
+    attr(out, "design_map"),
+    data.frame(ID = c(1, 2), DESIGN_ID = c("B", "A"))
+  )
+})
+
+test_that("design_cols survive BLQ removal on the remaining records", {
+  dat <- data.frame(
+    ID = c(1, 1, 1),
+    TIME = c(0, 1, 2),
+    EVID = c(1, 0, 0),
+    AMT = c(100, 0, 0),
+    DV = c(0, 5, 4),
+    WT = c(70, 70, 70),
+    DVID = c(0, 1, 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) {
+      data.frame(ID = 1, .design_id = 1, TIME = c(0, 1, 2), WT = 70)
+    },
+    simulate_anonymized_concentrations = function(...) {
+      data.frame(ID = c(1, 1), TIME = c(1, 2), DV_SIM = c(0.01, 3))
+    }
+  )
+  out <- anonymize_dataset(
+    dat, covariates = "WT", design_cols = "DVID", model_file = model, loq = 0.1
+  )
+  expect_equal(out$TIME, c(0, 2))
+  expect_equal(out$DVID, c(0, 2))
+})
+
+test_that("design_cols are validated", {
+  dat <- data.frame(
+    ID = 1, TIME = 0, EVID = 1, AMT = 100, DV = 0, WT = 70, OCC = 1, CMT = 1
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", design_cols = "NOPE", model_file = model),
+    "`design_cols` were not found"
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", design_cols = 1, model_file = model),
+    "must be a character vector"
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = "WT", design_cols = "TIME", model_file = model),
+    "cannot include mapped NONMEM"
+  )
+  expect_error(
+    anonymize_dataset(
+      dat, covariates = c("WT", "OCC"), design_cols = "OCC", model_file = model
+    ),
+    "both resampled `covariates` and verbatim `design_cols`"
+  )
+})
+
+test_that("design_cols overlapping event columns are kept once", {
+  dat <- data.frame(
+    ID = c(1, 1), TIME = c(0, 1), EVID = c(1, 0), AMT = c(100, 0),
+    DV = c(0, 5), CMT = c(1, 2), WT = 70, OCC = c(1, 1)
+  )
+  sampled <- data.frame(ID = 1, .design_id = "1", TIME = c(0, 1), WT = 70)
+  out <- build_anonymized_simulation_input(
+    data = dat, sampled_covs = sampled, covariates = "WT",
+    dictionary = normalize_anonymize_dictionary(list()),
+    design_cols = c("CMT", "OCC")
+  )
+  expect_named(out, c("ID", "TIME", "EVID", "AMT", "DV", "CMT", "OCC", "WT"))
+  expect_equal(out$CMT, c(1, 2))
+})
+
+test_that("design_cols does not shift existing positional arguments", {
+  args <- names(formals(anonymize_dataset))
+  expect_equal(
+    args[seq_len(which(args == "seed"))],
+    c("data", "covariates", "model_file", "dictionary", "method", "cat_covs",
+      "loq", "blq_method", "sigdig", "n_candidates", "similarity", "score_on",
+      "seed")
+  )
+  expect_equal(tail(args, 2), c("design_cols", "..."))
+})
+
+test_that("design_cols are kept when covariates is empty", {
+  dat <- data.frame(
+    ID = c(1, 1, 1, 2, 2, 2),
+    TIME = c(0, 1, 2, 0, 1, 2),
+    EVID = c(1, 0, 0, 1, 0, 0),
+    AMT = c(100, 0, 0, 200, 0, 0),
+    DV = c(0, 4, 3, 0, 8, 6),
+    DVID = c(0, 1, 2, 0, 2, 1)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      expect_true("DVID" %in% names(data))
+      obs <- data[data$EVID == 0, ]
+      data.frame(ID = obs$ID, TIME = obs$TIME, DV_SIM = 1)
+    }
+  )
+  out <- anonymize_dataset(
+    dat, covariates = character(0), design_cols = "DVID", model_file = model, seed = 1
+  )
+  expect_named(out, c("ID", "TIME", "EVID", "AMT", "DV", "DVID"))
+  # each subject's DVID pattern follows its cloned design (identified by AMT)
+  for (d in split(out, out$ID)) {
+    src <- dat[dat$AMT == d$AMT[1] & dat$EVID == 1, "ID"]
+    expect_equal(d$DVID, dat$DVID[dat$ID == src])
+  }
+})
+
 test_that("monotone time check reports offending subjects", {
   dat <- data.frame(
     ID = c(1, 1, 1, 2, 2, 2, 3, 3),
@@ -1502,4 +1671,60 @@ test_that("anonymize_dataset keeps an upper-case PK covariate next to the `pk` k
   out <- anonymize_dataset(dat, covariates = "PK", model_file = model, seed = 3)
   expect_true("PK" %in% names(out))
   expect_true(all(is.finite(out$DV[out$EVID == 0 & out$MDV == 0])))
+})
+
+test_that("a cat_covs entry with implausibly many levels is rejected before sampling", {
+  # e.g. a clock column (time of previous reset) passed in `cat_covs`
+  dat <- data.frame(
+    ID = rep(1:30, each = 2), TIME = rep(c(0, 1), 30),
+    EVID = rep(c(1, 0), 30), AMT = rep(c(100, 0), 30),
+    DV = rep(c(0, 5), 30),
+    PRT = seq(0.5, 30, by = 0.5),
+    WT = rep(seq(50, 108, by = 2), each = 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    simulate_anonymized_concentrations = function(...) {
+      stop("simulation should not be reached")
+    }
+  )
+  expect_error(
+    anonymize_dataset(
+      dat, covariates = c("PRT", "WT"), model_file = model, cat_covs = "PRT"
+    ),
+    "`PRT` \\(60 levels\\)",
+    class = "irxforge_cat_levels_error"
+  )
+  # `max_cat_levels` is accepted through `...`
+  expect_no_error(
+    check_anonymize_dots("max_cat_levels", 1, method = "mice")
+  )
+})
+
+test_that("the up-front model check counts design_cols as part of the frame", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
+    AMT = c(100, 0, 100, 0), DV = c(0, 4, 0, 5),
+    WT = c(70, 70, 80, 80), occ = c(1, 2, 1, 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[individual_parameters]", "  CL = TVCL * WT * (1 + 0.1 * occ)"), model)
+  # a design column referenced by the model does not trigger the warning
+  expect_no_warning(check_anonymize_model_covariates(
+    model, dat, covariates = "WT", dictionary = normalize_anonymize_dictionary(list()),
+    design_cols = "occ"
+  ))
+  expect_warning(
+    check_anonymize_model_covariates(
+      model, dat, covariates = "WT", dictionary = normalize_anonymize_dictionary(list())
+    ),
+    "neither|not in `covariates` or `design_cols`.*`occ`"
+  )
+  # a design column named in another case by the model is bridged too
+  writeLines(c("[individual_parameters]", "  CL = TVCL * WT * (1 + 0.1 * OCC)"), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "EVID", "AMT", "DV", "occ", "WT")
+  )
+  expect_true("  OCC = occ" %in% readLines(out))
 })
