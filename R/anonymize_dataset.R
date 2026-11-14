@@ -24,7 +24,14 @@
 #'   the structural columns (e.g. `AMT = DOSE`, `DV = lndv`) are dropped,
 #'   because the anonymized dataset already uses the canonical names `ID`,
 #'   `TIME`, `EVID`, `AMT`, `DV` and `RATE` (plus `CMT`, `MDV`, `ADDL`, `II`
-#'   and `SS` when present in `data`). A relative `[priors]` `from_fit` path is
+#'   and `SS` when present in `data`). FeRx matches covariate names
+#'   case-sensitively, so when the model references a covariate under a
+#'   spelling that differs only by case from its column (e.g. `CONC0` for a
+#'   `conc0` column) and the `[data]` block does not map it, a rename such as
+#'   `CONC0 = conc0` is added. This is checked before any covariate is sampled:
+#'   a reference that matches several columns case-insensitively is an error,
+#'   and a reference to a column of `data` that is in neither `covariates` nor
+#'   `design_cols` raises a warning. A relative `[priors]` `from_fit` path is
 #'   made absolute against the directory of `model_file`, so it keeps resolving
 #'   from the copy. Comments (`#` and `//`) are handled as FeRx handles them.
 #' @param dictionary named list mapping expected NONMEM column names to columns
@@ -183,6 +190,13 @@ anonymize_dataset <- function(
     model_file = model_file,
     dictionary = dictionary,
     loq = loq,
+    design_cols = design_cols
+  )
+  check_anonymize_model_covariates(
+    model_file = model_file,
+    data = data,
+    covariates = covariates,
+    dictionary = dictionary,
     design_cols = design_cols
   )
   id_var <- dictionary$ID
@@ -1106,7 +1120,10 @@ anonymized_structural_columns <- function() {
 #'   its target does not collide with a column left in place by the retained
 #'   renames (see `retain_data_maps()`). Maps onto (or from) the
 #'   structural columns are dropped, because the anonymized frame already uses
-#'   the canonical names (`ID`, `TIME`, `EVID`, `AMT`, `DV`, ...).
+#'   the canonical names (`ID`, `TIME`, `EVID`, `AMT`, `DV`, ...). A covariate
+#'   the model references under a spelling that differs only by case from its
+#'   column gets an added rename (see `ferx_covariate_case_bridges()`); if no
+#'   `[data]` block exists, one is appended for it.
 #'
 #' * a relative `[priors]` `from_fit` path, which FeRx resolves against the
 #'   model file's directory, is made absolute against the directory of
@@ -1132,19 +1149,10 @@ prepare_simulation_model_file <- function(
 ) {
   lines <- readLines(model_file, warn = FALSE)
   model_dir <- dirname(normalizePath(model_file, winslash = "/", mustWork = FALSE))
-  # Comments are stripped the way FeRx does (`#` and `//`) before any line is
-  # classified, so a commented header or key is read as FeRx reads it.
-  stripped <- strip_ferx_comment(lines)
-  header_re <- "^\\s*\\[\\s*([A-Za-z_][A-Za-z0-9_]*)(\\s+[^]]*)?\\]\\s*$"
-  is_header <- grepl(header_re, stripped)
-  block <- rep(NA_character_, length(lines))
-  current <- NA_character_
-  for (i in seq_along(lines)) {
-    if (is_header[i]) {
-      current <- tolower(sub(header_re, "\\1", stripped[i]))
-    }
-    block[i] <- current
-  }
+  parsed <- parse_ferx_model_lines(lines)
+  stripped <- parsed$stripped
+  is_header <- parsed$is_header
+  block <- parsed$block
   split_key_value <- function(i) {
     content <- trimws(stripped[i])
     if (!nzchar(content) || !grepl("=", content, fixed = TRUE)) return(NULL)
@@ -1181,6 +1189,7 @@ prepare_simulation_model_file <- function(
     map_idx <- integer(0)
     map_target <- character(0)
     map_source <- character(0)
+    map_key <- character(0)
     for (i in data_body) {
       kv <- split_key_value(i)
       if (is.null(kv)) next
@@ -1192,6 +1201,7 @@ prepare_simulation_model_file <- function(
         } else {
           lines[i] <- paste0(indent_of(i), "path = \"", abs_data_path, "\"")
           path_written <- TRUE
+          path_idx <- i
         }
         next
       }
@@ -1199,26 +1209,319 @@ prepare_simulation_model_file <- function(
         map_idx <- c(map_idx, i)
         map_target <- c(map_target, toupper(key))
         map_source <- c(map_source, toupper(value))
+        map_key <- c(map_key, key)
       } else {
         keep[i] <- FALSE
       }
     }
-    keep[map_idx[!retain_data_maps(map_target, map_source, toupper(columns))]] <- FALSE
+    retained <- retain_data_maps(map_target, map_source, toupper(columns))
+    keep[map_idx[!retained]] <- FALSE
+    map_key <- map_key[retained]
+    map_source <- map_source[retained]
+  } else {
+    map_key <- character(0)
+    map_source <- character(0)
+  }
+
+  # Columns as FeRx will see them once the retained `[data]` renames are
+  # applied (FeRx resolves rename sources case-insensitively).
+  renamed <- columns
+  for (j in seq_along(map_key)) {
+    renamed[toupper(columns) == map_source[j]] <- map_key[j]
+  }
+  # FeRx matches the model's covariate references to data columns
+  # case-sensitively, so a covariate the model spells `CONC0` is not found in a
+  # `conc0` column. Bridge case-only differences with extra `[data]` renames.
+  bridges <- ferx_covariate_case_bridges(
+    stripped = stripped,
+    block = block,
+    is_header = is_header,
+    columns = renamed,
+    renamable = setdiff(
+      columns[!toupper(columns) %in% map_source],
+      anonymized_structural_columns()
+    )
+  )
+  bridge_lines <- if (length(bridges) > 0) {
+    paste0("  ", names(bridges), " = ", unname(bridges))
+  } else {
+    character(0)
+  }
+
+  if (length(data_body) > 0) {
+    insert_at <- if (path_written) path_idx else which(is_header & block == "data")[1]
     if (!path_written) {
       # A `[data]` block without `path` fails to parse; add the simulation path
       # right after the block header.
-      header_idx <- which(is_header & block == "data")[1]
-      lines <- append(
-        lines,
-        paste0("  path = \"", abs_data_path, "\""),
-        after = header_idx
-      )
-      keep <- append(keep, TRUE, after = header_idx)
+      bridge_lines <- c(paste0("  path = \"", abs_data_path, "\""), bridge_lines)
     }
+    lines <- append(lines, bridge_lines, after = insert_at)
+    keep <- append(keep, rep(TRUE, length(bridge_lines)), after = insert_at)
+  } else if (length(bridge_lines) > 0) {
+    abs_data_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+    lines <- c(lines, "", "[data]", paste0("  path = \"", abs_data_path, "\""), bridge_lines)
+    keep <- c(keep, rep(TRUE, 3 + length(bridge_lines)))
   }
 
   writeLines(lines[keep], path)
   invisible(path)
+}
+
+#' Identifiers a FeRx model file references and defines
+#'
+#' A lightweight, conservative scan of a FeRx model file (it does not
+#' reimplement the FeRx parser). Identifiers are collected from the model's
+#' expression blocks, i.e. every block except `[parameters]`, `[data]`,
+#' `[data_selection]`, `[initial_values]`, `[fit_options]`, `[priors]`,
+#' `[simulation]` and `[output]`, after stripping comments and quoted strings.
+#' An identifier is *defined* when it is assigned (`NAME =`, including named
+#' arguments such as `cl = CL`) or declared in `[parameters]`, and a *call* when
+#' it is followed by `(`. Everything else is a candidate covariate reference.
+#'
+#' @param stripped model-file lines with comments stripped.
+#' @param block lower-cased block name of each line (`NA` before the first
+#'   header).
+#' @param is_header logical, whether each line is a block header.
+#'
+#' @returns a list with character vectors `referenced` (candidate covariate
+#'   references, not defined anywhere in the model) and `defined`.
+#'
+#' @noRd
+ferx_model_identifiers <- function(stripped, block, is_header) {
+  ident_re <- "(?<![A-Za-z0-9_.])[A-Za-z_][A-Za-z0-9_]*"
+  extract <- function(text, pattern) {
+    unlist(regmatches(text, gregexpr(pattern, text, perl = TRUE)))
+  }
+  body <- !is_header & !is.na(block)
+  text <- gsub("\"[^\"]*\"|'[^']*'", " ", stripped)
+  param_text <- text[body & block == "parameters"]
+  non_expression <- c(
+    "parameters", "data", "data_selection", "initial_values", "fit_options",
+    "priors", "simulation", "output"
+  )
+  expr_text <- text[body & !block %in% non_expression]
+  # ODE compartments: `states = [a, b]`, `d/dt(a)` and `obs_cmt = a`
+  state_lists <- extract(expr_text, "states\\s*=\\s*\\[[^]]*\\]")
+  states <- c(
+    extract(sub("^[^[]*", "", state_lists), ident_re),
+    sub("^d\\s*/\\s*dt\\s*\\(\\s*", "", extract(
+      expr_text, "(?<![A-Za-z0-9_])d\\s*/\\s*dt\\s*\\(\\s*[A-Za-z_][A-Za-z0-9_]*"
+    )),
+    sub("^obs_cmt\\s*=\\s*", "", extract(
+      expr_text, "(?<![A-Za-z0-9_])obs_cmt\\s*=\\s*[A-Za-z_][A-Za-z0-9_]*"
+    ))
+  )
+  defined <- unique(c(
+    extract(param_text, ident_re),
+    extract(expr_text, paste0(ident_re, "(?=\\s*=(?!=))")),
+    states
+  ))
+  calls <- extract(expr_text, paste0(ident_re, "(?=\\s*\\()"))
+  referenced <- extract(expr_text, paste0(ident_re, "(?![A-Za-z0-9_])(?!\\s*[(=])"))
+  # `==` comparisons are references, not assignments
+  referenced <- c(referenced, extract(expr_text, paste0(ident_re, "(?=\\s*==)")))
+  referenced <- setdiff(unique(referenced), c(defined, calls, ferx_grammar_tokens()))
+  list(referenced = referenced, defined = defined)
+}
+
+#' FeRx grammar keywords that are never covariate references
+#'
+#' Bare words of the model-file syntax that the identifier scan would
+#' otherwise read as references: structural-model keywords (`pk`, `ode`,
+#' `ode_template`), the `d/dt` derivative notation, conditional and logical
+#' keywords, `[covariates]` type words, and literals. Matched exactly (FeRx
+#' keywords are lower case), so an upper-case `PK` covariate is still a
+#' reference.
+#'
+#' @noRd
+ferx_grammar_tokens <- function() {
+  c(
+    "pk", "ode", "ode_template", "d", "dt", "states", "obs_cmt",
+    "if", "then", "else", "elif", "elseif", "end", "and", "or", "not",
+    "continuous", "cont", "categorical", "cat", "levels", "auto",
+    "true", "false", "TRUE", "FALSE", "inf", "Inf", "nan", "NaN"
+  )
+}
+
+#' `[data]` renames that bridge case-only covariate name differences
+#'
+#' FeRx matches a model's covariate references to data columns
+#' case-sensitively. When the model references a name (e.g. `CONC0`) that no
+#' column carries exactly, but exactly one renamable covariate column matches
+#' it case-insensitively (e.g. `conc0`), a `CONC0 = conc0` rename makes the
+#' column available under the model's spelling. A reference that matches
+#' several columns case-insensitively, or several references that differ only
+#' by case and match the same column, cannot be bridged and are reported as an
+#' error naming the mismatch. A column the model already references under its
+#' exact spelling is never renamed.
+#'
+#' @param stripped model-file lines with comments stripped.
+#' @param block,is_header block name of each line and header flags.
+#' @param columns column names as FeRx sees them after the retained `[data]`
+#'   renames.
+#' @param renamable covariate columns not already renamed by a retained
+#'   `[data]` map, i.e. those a bridge may rename.
+#'
+#' @returns named character vector `c(<model name> = <column>)` of the renames
+#'   to add (possibly empty).
+#'
+#' @noRd
+ferx_covariate_case_bridges <- function(stripped, block, is_header, columns,
+                                        renamable) {
+  all_refs <- ferx_model_identifiers(stripped, block, is_header)$referenced
+  # only references that no column carries under the model's exact spelling,
+  # and that some column carries under another case
+  refs <- all_refs[!all_refs %in% columns & toupper(all_refs) %in% toupper(columns)]
+  # a column the model references under its exact spelling is never renamed
+  # away: a case-variant reference to it is then most likely not a covariate
+  # reference at all (the identifier scan is heuristic), and renaming would
+  # break the exact reference
+  refs <- refs[!vapply(refs, function(ref) {
+    any(columns[toupper(columns) == toupper(ref)] %in% all_refs)
+  }, logical(1))]
+  if (length(refs) == 0) return(character(0))
+  structural <- toupper(anonymized_structural_columns())
+  refs <- refs[!toupper(refs) %in% structural]
+  bridges <- character(0)
+  problems <- character(0)
+  for (ref in refs) {
+    matches <- columns[toupper(columns) == toupper(ref)]
+    variants <- refs[toupper(refs) == toupper(ref)]
+    if (length(matches) > 1) {
+      problems <- c(problems, paste0(
+        "`", ref, "` matches several columns that differ only by case (",
+        paste0("`", matches, "`", collapse = ", "), ")"
+      ))
+    } else if (length(variants) > 1) {
+      if (identical(ref, variants[[1]])) {
+        problems <- c(problems, paste0(
+          paste0("`", variants, "`", collapse = ", "),
+          " differ only by case but must all resolve to column `", matches, "`"
+        ))
+      }
+    } else if (matches %in% renamable) {
+      bridges[[ref]] <- matches
+    } else {
+      problems <- c(problems, paste0(
+        "`", ref, "` matches column `", matches, "` only case-insensitively, ",
+        "and that column is already renamed in the `[data]` block"
+      ))
+    }
+  }
+  if (length(problems) > 0) {
+    stop(
+      "The model references covariate(s) whose spelling matches the ",
+      "anonymized dataset's columns only case-insensitively, which FeRx does ",
+      "not resolve: ", paste(problems, collapse = "; "), ". Spell the ",
+      "covariates in the model as they are spelled in `data`, or map them in ",
+      "the model's `[data]` block (e.g. `CONC0 = conc0`).",
+      call. = FALSE
+    )
+  }
+  bridges
+}
+
+#' Classify the lines of a FeRx model file by block
+#'
+#' Comments are stripped the way FeRx does (`#` and `//`) before any line is
+#' classified, so a commented header or key is read as FeRx reads it.
+#'
+#' @param lines raw model-file lines.
+#'
+#' @returns a list with `stripped` (lines without comments), `is_header`
+#'   (logical) and `block` (lower-cased name of the block each line belongs
+#'   to, `NA` before the first header).
+#'
+#' @noRd
+parse_ferx_model_lines <- function(lines) {
+  stripped <- strip_ferx_comment(lines)
+  header_re <- "^\\s*\\[\\s*([A-Za-z_][A-Za-z0-9_]*)(\\s+[^]]*)?\\]\\s*$"
+  is_header <- grepl(header_re, stripped)
+  block <- rep(NA_character_, length(lines))
+  current <- NA_character_
+  for (i in seq_along(lines)) {
+    if (is_header[i]) {
+      current <- tolower(sub(header_re, "\\1", stripped[i]))
+    }
+    block[i] <- current
+  }
+  list(stripped = stripped, is_header = is_header, block = block)
+}
+
+#' Check the model's covariate references against the anonymized frame
+#'
+#' Runs before any covariate is sampled, so a column-naming problem is reported
+#' as such instead of surfacing from inside the FeRx simulation. It prepares
+#' the simulation copy of `model_file` (see `prepare_simulation_model_file()`)
+#' for the columns the anonymized frame will carry, which bridges covariates
+#' the model spells in another case and errors on references that cannot be
+#' bridged. It also warns about model references that match a column of
+#' `data` that is in neither `covariates` nor `design_cols` (and so not in the
+#' anonymized frame).
+#'
+#' @param model_file path to the FeRx model file.
+#' @param data original data.frame.
+#' @param covariates covariates to sample.
+#' @param dictionary normalized column dictionary.
+#' @param design_cols design columns cloned verbatim into the anonymized frame.
+#'
+#' @returns `invisible(TRUE)`.
+#'
+#' @noRd
+check_anonymize_model_covariates <- function(model_file, data, covariates, dictionary,
+                                             design_cols = NULL) {
+  optional <- c("CMT", "MDV", "ADDL", "II", "SS")
+  # mirrors the columns of `build_anonymized_simulation_input()`: design
+  # columns are cloned under their own names
+  event_cols <- unique(c(
+    unlist(dictionary[c("ID", "TIME", "EVID", "AMT", "RATE")], use.names = FALSE),
+    optional
+  ))
+  design_cols <- setdiff(unique(design_cols), event_cols)
+  frame_cols <- unique(c(
+    "ID", "TIME", "EVID", "AMT",
+    if (dictionary$RATE %in% names(data)) "RATE",
+    "DV",
+    intersect(optional, names(data)),
+    design_cols,
+    covariates
+  ))
+  sim_model <- tempfile(fileext = ".ferx")
+  on.exit(unlink(sim_model), add = TRUE)
+  prepare_simulation_model_file(
+    model_file = model_file,
+    data_path = tempfile(fileext = ".csv"),
+    columns = frame_cols,
+    path = sim_model
+  )
+
+  parsed <- parse_ferx_model_lines(readLines(sim_model, warn = FALSE))
+  refs <- ferx_model_identifiers(parsed$stripped, parsed$block, parsed$is_header)$referenced
+  data_maps <- parsed$stripped[!parsed$is_header & parsed$block %in% "data"]
+  data_maps <- trimws(sub("=.*$", "", data_maps[grepl("=", data_maps, fixed = TRUE)]))
+  available <- toupper(c(frame_cols, data_maps))
+  structural <- unique(c(
+    toupper(anonymized_structural_columns()),
+    toupper(unlist(dictionary, use.names = FALSE))
+  ))
+  dropped <- setdiff(
+    names(data),
+    c(covariates, design_cols, unlist(dictionary, use.names = FALSE))
+  )
+  dropped <- dropped[!toupper(dropped) %in% structural]
+  refs <- refs[!toupper(refs) %in% c(available, structural)]
+  missing <- dropped[toupper(dropped) %in% toupper(refs)]
+  if (length(missing) > 0) {
+    warning(
+      "The model appears to reference column(s) of `data` that are not in ",
+      "`covariates` or `design_cols`, so they are not part of the anonymized ",
+      "dataset: ", paste0("`", missing, "`", collapse = ", "), ". Add them to ",
+      "`covariates` (sampled) or `design_cols` (cloned from the source design) ",
+      "if the model needs them, or the simulation will fail.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
 }
 
 #' Strip a trailing FeRx line comment

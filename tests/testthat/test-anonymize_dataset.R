@@ -1445,6 +1445,234 @@ test_that("anonymize_dataset forwards accepted `...` arguments to the sampler", 
   expect_equal(received, list(maxit = 7))
 })
 
+test_that("ferx_model_identifiers separates references from definitions and calls", {
+  lines <- c(
+    "[parameters]",
+    "  theta TVCL(0.1, 0.001, 10)",
+    "  omega ETA_CL ~ 0.1",
+    "[individual_parameters]",
+    "  CL = TVCL * (WT / 70)^0.75 * exp(ETA_CL) # uses Wt in a comment",
+    "  V = 1e-3 * if (SEX == 1) 2 else 1",
+    "[initial_conditions]",
+    "  CENT = CONC0 * V",
+    "[structural_model]",
+    "  pk one_cpt_oral(cl = CL, v = V)",
+    "[data]",
+    "  path = data.csv",
+    "  ASA = asa",
+    "[fit_options]",
+    "  method = foce"
+  )
+  parsed <- parse_ferx_model_lines(lines)
+  ids <- ferx_model_identifiers(parsed$stripped, parsed$block, parsed$is_header)
+  expect_setequal(ids$referenced, c("WT", "SEX", "CONC0"))
+  expect_true(all(c("TVCL", "ETA_CL", "CL", "V", "CENT", "cl", "v") %in% ids$defined))
+})
+
+test_that("prepare_simulation_model_file bridges a covariate named in another case (#43)", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c(
+    "[individual_parameters]",
+    "  CL = TVCL * (WT / 70) * (1 + ASA)",
+    "[initial_conditions]",
+    "  CENT = CONC0",
+    "[data]",
+    "  path = ../data/original.csv",
+    "  ODV = dv",
+    "  DV = lndv",
+    "  ASA = asa",
+    "  WT = wt"
+  ), model)
+  data_path <- tempfile(fileext = ".csv")
+  out <- prepare_simulation_model_file(
+    model, data_path,
+    c("ID", "TIME", "EVID", "AMT", "DV", "wt", "asa", "sex", "conc0")
+  )
+  abs_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+  lines <- readLines(out)
+  data_lines <- lines[(which(lines == "[data]") + 1):length(lines)]
+  expect_equal(
+    data_lines,
+    c(paste0("  path = \"", abs_path, "\""), "  CONC0 = conc0", "  ASA = asa", "  WT = wt")
+  )
+})
+
+test_that("prepare_simulation_model_file adds a [data] block for a bridge when absent", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[individual_parameters]", "  CL = TVCL * WT"), model)
+  data_path <- tempfile(fileext = ".csv")
+  out <- prepare_simulation_model_file(model, data_path, c("ID", "TIME", "DV", "wt"))
+  abs_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+  expect_equal(
+    readLines(out),
+    c(
+      "[individual_parameters]", "  CL = TVCL * WT", "",
+      "[data]", paste0("  path = \"", abs_path, "\""), "  WT = wt"
+    )
+  )
+})
+
+test_that("prepare_simulation_model_file does not bridge exact or structural matches", {
+  model <- tempfile(fileext = ".ferx")
+  src <- c(
+    "[individual_parameters]", "  CL = TVCL * WT * Time",
+    "[data]", "  path = x.csv"
+  )
+  writeLines(src, model)
+  data_path <- tempfile(fileext = ".csv")
+  out <- prepare_simulation_model_file(model, data_path, c("ID", "TIME", "DV", "WT", "wt2"))
+  expect_false(any(grepl("WT =|Time =", readLines(out))))
+})
+
+test_that("prepare_simulation_model_file names covariate case mismatches it cannot bridge", {
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[individual_parameters]", "  CL = TVCL * WT"), model)
+  expect_error(
+    prepare_simulation_model_file(model, tempfile(fileext = ".csv"), c("ID", "wt", "Wt")),
+    "`WT` matches several columns that differ only by case \\(`wt`, `Wt`\\)"
+  )
+  writeLines(c("[individual_parameters]", "  CL = TVCL * WT * Wt"), model)
+  expect_error(
+    prepare_simulation_model_file(model, tempfile(fileext = ".csv"), c("ID", "wt")),
+    "`WT`, `Wt` differ only by case but must all resolve to column `wt`"
+  )
+})
+
+test_that("anonymize_dataset reports an unbridgeable covariate spelling before sampling", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
+    AMT = c(100, 0, 100, 0), DV = c(0, 4, 0, 5),
+    wt = c(70, 70, 80, 80), Wt = c(1, 1, 2, 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[individual_parameters]", "  CL = TVCL * WT"), model)
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) stop("sampler reached")
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = c("wt", "Wt"), model_file = model),
+    "matches several columns that differ only by case"
+  )
+})
+
+test_that("anonymize_dataset warns up front about model references left out of `covariates`", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
+    AMT = c(100, 0, 100, 0), DV = c(0, 4, 0, 5),
+    WT = c(70, 70, 80, 80), conc0 = c(1, 1, 2, 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c(
+    "[individual_parameters]", "  CL = TVCL * WT",
+    "[initial_conditions]", "  CENT = CONC0"
+  ), model)
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(...) stop("sampler reached")
+  )
+  expect_warning(
+    expect_error(
+      anonymize_dataset(dat, covariates = "WT", model_file = model),
+      "sampler reached"
+    ),
+    "not in `covariates`.*`conc0`"
+  )
+})
+
+test_that("anonymize_dataset simulates a model naming a covariate in another case (#43)", {
+  skip_if_not_installed("ferx")
+  ex <- ferx::ferx_example("warfarin")
+  dat <- utils::read.csv(ex$data, na.strings = ".")
+  dat <- dat[dat$ID %in% 1:6, ]
+  dat$wt <- 60 + 5 * dat$ID
+  model <- tempfile(fileext = ".ferx")
+  src <- readLines(ex$model)
+  src <- sub("CL = TVCL * exp(ETA_CL)", "CL = TVCL * (WT / 70)^0.75 * exp(ETA_CL)",
+             src, fixed = TRUE)
+  writeLines(c(src, "[data]", paste0("  path = ", ex$data)), model)
+  out <- anonymize_dataset(dat, covariates = "wt", model_file = model, seed = 3)
+  expect_true("wt" %in% names(out))
+  expect_true(all(is.finite(out$DV[out$EVID == 0 & out$MDV == 0])))
+})
+
+test_that("ferx_model_identifiers treats ODE states and grammar words as non-covariates", {
+  lines <- c(
+    "[structural_model]",
+    "  ode(obs_cmt=central, states=[depot, central])",
+    "[odes]",
+    "  d/dt(depot) = -KA * depot",
+    "  d/dt(central) = KA * depot - CL / V * central * PK",
+    "[scaling]",
+    "  y = central / V"
+  )
+  parsed <- parse_ferx_model_lines(lines)
+  ids <- ferx_model_identifiers(parsed$stripped, parsed$block, parsed$is_header)
+  expect_setequal(ids$referenced, c("KA", "CL", "V", "PK"))
+  expect_true(all(c("depot", "central") %in% ids$defined))
+})
+
+test_that("prepare_simulation_model_file never renames an exactly referenced column away", {
+  # `pk` is the FeRx structural keyword; the `PK` covariate column must keep
+  # its name rather than be bridged to `pk`
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c(
+    "[individual_parameters]",
+    "  CL = TVCL * (1 + PK)",
+    "[structural_model]",
+    "  pk one_cpt_oral(cl=CL, v=V, ka=KA)",
+    "[data]",
+    "  path = x.csv"
+  ), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV", "PK")
+  )
+  expect_false(any(grepl("^\\s*pk\\s*=", readLines(out))))
+
+  # an ODE state that differs only by case from a covariate column is not
+  # a covariate reference, and the exactly referenced column stays put
+  writeLines(c(
+    "[structural_model]",
+    "  ode(obs_cmt=central, states=[depot, central])",
+    "[odes]",
+    "  d/dt(depot) = -KA * depot",
+    "  d/dt(central) = KA * depot - CL / V * central * DEPOT",
+    "[data]",
+    "  path = x.csv"
+  ), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV", "DEPOT", "CENTRAL")
+  )
+  expect_false(any(grepl("depot =|central =", readLines(out))))
+
+  # a heuristic false positive that collides with an exact reference is not
+  # reported as an ambiguity either
+  writeLines(c(
+    "[individual_parameters]",
+    "  CL = TVCL * WT * Wt",
+    "[data]",
+    "  path = x.csv"
+  ), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV", "WT")
+  )
+  expect_false(any(grepl("Wt =", readLines(out))))
+})
+
+test_that("anonymize_dataset keeps an upper-case PK covariate next to the `pk` keyword", {
+  skip_if_not_installed("ferx")
+  ex <- ferx::ferx_example("warfarin")
+  dat <- utils::read.csv(ex$data, na.strings = ".")
+  dat <- dat[dat$ID %in% 1:6, ]
+  dat$PK <- 0.1 * dat$ID
+  model <- tempfile(fileext = ".ferx")
+  src <- readLines(ex$model)
+  src <- sub("CL = TVCL * exp(ETA_CL)", "CL = TVCL * (1 + PK) * exp(ETA_CL)",
+             src, fixed = TRUE)
+  writeLines(c(src, "[data]", paste0("  path = ", ex$data)), model)
+  out <- anonymize_dataset(dat, covariates = "PK", model_file = model, seed = 3)
+  expect_true("PK" %in% names(out))
+  expect_true(all(is.finite(out$DV[out$EVID == 0 & out$MDV == 0])))
+})
+
 test_that("a cat_covs entry with implausibly many levels is rejected before sampling", {
   # e.g. a clock column (time of previous reset) passed in `cat_covs`
   dat <- data.frame(
@@ -1472,4 +1700,31 @@ test_that("a cat_covs entry with implausibly many levels is rejected before samp
   expect_no_error(
     check_anonymize_dots("max_cat_levels", 1, method = "mice")
   )
+})
+
+test_that("the up-front model check counts design_cols as part of the frame", {
+  dat <- data.frame(
+    ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
+    AMT = c(100, 0, 100, 0), DV = c(0, 4, 0, 5),
+    WT = c(70, 70, 80, 80), occ = c(1, 2, 1, 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c("[individual_parameters]", "  CL = TVCL * WT * (1 + 0.1 * occ)"), model)
+  # a design column referenced by the model does not trigger the warning
+  expect_no_warning(check_anonymize_model_covariates(
+    model, dat, covariates = "WT", dictionary = normalize_anonymize_dictionary(list()),
+    design_cols = "occ"
+  ))
+  expect_warning(
+    check_anonymize_model_covariates(
+      model, dat, covariates = "WT", dictionary = normalize_anonymize_dictionary(list())
+    ),
+    "neither|not in `covariates` or `design_cols`.*`occ`"
+  )
+  # a design column named in another case by the model is bridged too
+  writeLines(c("[individual_parameters]", "  CL = TVCL * WT * (1 + 0.1 * OCC)"), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "EVID", "AMT", "DV", "occ", "WT")
+  )
+  expect_true("  OCC = occ" %in% readLines(out))
 })

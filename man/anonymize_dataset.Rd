@@ -46,7 +46,14 @@ simultaneous, so \code{HTCM = WT} with \code{WT = HT} is kept). Maps onto or fro
 the structural columns (e.g. \code{AMT = DOSE}, \code{DV = lndv}) are dropped,
 because the anonymized dataset already uses the canonical names \code{ID},
 \code{TIME}, \code{EVID}, \code{AMT}, \code{DV} and \code{RATE} (plus \code{CMT}, \code{MDV}, \code{ADDL}, \code{II}
-and \code{SS} when present in \code{data}). A relative \verb{[priors]} \code{from_fit} path is
+and \code{SS} when present in \code{data}). FeRx matches covariate names
+case-sensitively, so when the model references a covariate under a
+spelling that differs only by case from its column (e.g. \code{CONC0} for a
+\code{conc0} column) and the \verb{[data]} block does not map it, a rename such as
+\code{CONC0 = conc0} is added. This is checked before any covariate is sampled:
+a reference that matches several columns case-insensitively is an error,
+and a reference to a column of \code{data} that is in neither \code{covariates} nor
+\code{design_cols} raises a warning. A relative \verb{[priors]} \code{from_fit} path is
 made absolute against the directory of \code{model_file}, so it keeps resolving
 from the copy. Comments (\verb{#} and \verb{//}) are handled as FeRx handles them.}
 
