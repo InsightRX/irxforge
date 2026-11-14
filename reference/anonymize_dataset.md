@@ -22,6 +22,7 @@ anonymize_dataset(
   similarity = c("energy"),
   score_on = c("concentration", "covariate"),
   seed = NULL,
+  design_cols = NULL,
   ...
 )
 ```
@@ -146,6 +147,22 @@ anonymize_dataset(
 
   optional integer seed used for covariate sampling and FeRx simulation.
   `NULL` (default) does not seed, so each call draws independently.
+
+- design_cols:
+
+  optional character vector of study-design columns to carry through
+  verbatim from the matched source design, e.g. analyte or readout
+  selectors (`DVID`), occasion indices for IOV (`OCC`), L2 pairing
+  indices (`PAIR`), carried dose history (`TLST`, `LASTDOSE`) or row
+  filters used by the model (`FLAG`). Unlike `covariates`, these columns
+  are never resampled, imputed or rounded: each anonymized subject
+  receives the values of the observed subject whose dosing/observation
+  design it clones, record by record. They are included in the data
+  passed to the FeRx simulation, so the model can reference them, and in
+  the returned dataset. Must not overlap with `covariates` or the mapped
+  `ID`, `EVID`, `AMT`, `TIME`, `DV` and `RATE` columns. Columns already
+  carried through as part of the event design (`CMT`, `MDV`, `ADDL`,
+  `II`, `SS`) are accepted and kept as usual.
 
 - ...:
 

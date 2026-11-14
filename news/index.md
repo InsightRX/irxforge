@@ -2,6 +2,14 @@
 
 ## irxforge (development version)
 
+- [`anonymize_dataset()`](https://insightrx.github.io/irxforge/reference/anonymize_dataset.md):
+  new `design_cols` argument for study-design columns (e.g. `DVID`,
+  `OCC`, L2 `PAIR` indices, carried dose history, model row filters)
+  that are cloned verbatim from the matched source design instead of
+  being dropped or resampled. They are present in the data handed to
+  `ferx_simulate()`, so models that reference them can be simulated, and
+  are kept in the returned dataset.
+
 - [`sample_covariates_mice_timevarying()`](https://insightrx.github.io/irxforge/reference/sample_covariates_mice_timevarying.md)
   no longer scales with `max profile length x nrow(data)`. Each
   transition step now draws donors only from observed transitions at

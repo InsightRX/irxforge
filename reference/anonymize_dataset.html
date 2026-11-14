@@ -11,7 +11,7 @@ observed concentrations with FeRx-simulated values."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9047</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9048</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -63,6 +63,7 @@ observed concentrations with FeRx-simulated values.</p>
 <span>  similarity <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"energy"</span><span class="op">)</span>,</span>
 <span>  score_on <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"concentration"</span>, <span class="st">"covariate"</span><span class="op">)</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  design_cols <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -183,6 +184,21 @@ run only once, on the selected covariate sample.</p></dd>
 <dd><p>optional integer seed used for covariate sampling and FeRx
 simulation. <code>NULL</code> (default) does not seed, so each call draws
 independently.</p></dd>
+
+
+<dt id="arg-design-cols">design_cols<a class="anchor" aria-label="anchor" href="#arg-design-cols"></a></dt>
+<dd><p>optional character vector of study-design columns to
+carry through verbatim from the matched source design, e.g. analyte or
+readout selectors (<code>DVID</code>), occasion indices for IOV (<code>OCC</code>), L2 pairing
+indices (<code>PAIR</code>), carried dose history (<code>TLST</code>, <code>LASTDOSE</code>) or row filters
+used by the model (<code>FLAG</code>). Unlike <code>covariates</code>, these columns are never
+resampled, imputed or rounded: each anonymized subject receives the values
+of the observed subject whose dosing/observation design it clones, record by
+record. They are included in the data passed to the FeRx simulation, so the
+model can reference them, and in the returned dataset. Must not overlap with
+<code>covariates</code> or the mapped <code>ID</code>, <code>EVID</code>, <code>AMT</code>, <code>TIME</code>, <code>DV</code> and <code>RATE</code>
+columns. Columns already carried through as part of the event design (<code>CMT</code>,
+<code>MDV</code>, <code>ADDL</code>, <code>II</code>, <code>SS</code>) are accepted and kept as usual.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
