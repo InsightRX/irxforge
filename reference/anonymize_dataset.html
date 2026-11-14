@@ -11,7 +11,7 @@ observed concentrations with FeRx-simulated values."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9048</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9049</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -99,7 +99,14 @@ simultaneous, so <code>HTCM = WT</code> with <code>WT = HT</code> is kept). Maps
 the structural columns (e.g. <code>AMT = DOSE</code>, <code>DV = lndv</code>) are dropped,
 because the anonymized dataset already uses the canonical names <code>ID</code>,
 <code>TIME</code>, <code>EVID</code>, <code>AMT</code>, <code>DV</code> and <code>RATE</code> (plus <code>CMT</code>, <code>MDV</code>, <code>ADDL</code>, <code>II</code>
-and <code>SS</code> when present in <code>data</code>). A relative <code>[priors]</code> <code>from_fit</code> path is
+and <code>SS</code> when present in <code>data</code>). FeRx matches covariate names
+case-sensitively, so when the model references a covariate under a
+spelling that differs only by case from its column (e.g. <code>CONC0</code> for a
+<code>conc0</code> column) and the <code>[data]</code> block does not map it, a rename such as
+<code>CONC0 = conc0</code> is added. This is checked before any covariate is sampled:
+a reference that matches several columns case-insensitively is an error,
+and a reference to a column of <code>data</code> that is in neither <code>covariates</code> nor
+<code>design_cols</code> raises a warning. A relative <code>[priors]</code> <code>from_fit</code> path is
 made absolute against the directory of <code>model_file</code>, so it keeps resolving
 from the copy. Comments (<code>#</code> and <code>//</code>) are handled as FeRx handles them.</p></dd>
 

@@ -3,6 +3,21 @@
 ## irxforge (development version)
 
 - [`anonymize_dataset()`](https://insightrx.github.io/irxforge/reference/anonymize_dataset.md):
+  a covariate that the model references under a spelling that differs
+  only by case from its data column (e.g. `CONC0` for a `conc0` column)
+  is now bridged with an added `[data]` rename (`CONC0 = conc0`) in the
+  simulation copy of `model_file`, since FeRx matches covariate names
+  case-sensitively. The model’s covariate references are checked before
+  any covariate is sampled: a reference that matches several columns
+  case-insensitively fails with an error naming the columns, and a
+  reference to a column of `data` in neither `covariates` nor
+  `design_cols` raises a warning, instead of the simulation failing
+  partway through with `E_MISSING_COVARIATE`. FeRx grammar words
+  (e.g. the `pk` keyword) and ODE state names are not treated as
+  covariate references, and a column the model references under its
+  exact spelling is never renamed (#43).
+
+- [`anonymize_dataset()`](https://insightrx.github.io/irxforge/reference/anonymize_dataset.md):
   new `design_cols` argument for study-design columns (e.g. `DVID`,
   `OCC`, L2 `PAIR` indices, carried dose history, model row filters)
   that are cloned verbatim from the matched source design instead of

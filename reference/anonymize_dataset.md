@@ -58,9 +58,17 @@ anonymize_dataset(
   `AMT = DOSE`, `DV = lndv`) are dropped, because the anonymized dataset
   already uses the canonical names `ID`, `TIME`, `EVID`, `AMT`, `DV` and
   `RATE` (plus `CMT`, `MDV`, `ADDL`, `II` and `SS` when present in
-  `data`). A relative `[priors]` `from_fit` path is made absolute
-  against the directory of `model_file`, so it keeps resolving from the
-  copy. Comments (`#` and `//`) are handled as FeRx handles them.
+  `data`). FeRx matches covariate names case-sensitively, so when the
+  model references a covariate under a spelling that differs only by
+  case from its column (e.g. `CONC0` for a `conc0` column) and the
+  `[data]` block does not map it, a rename such as `CONC0 = conc0` is
+  added. This is checked before any covariate is sampled: a reference
+  that matches several columns case-insensitively is an error, and a
+  reference to a column of `data` that is in neither `covariates` nor
+  `design_cols` raises a warning. A relative `[priors]` `from_fit` path
+  is made absolute against the directory of `model_file`, so it keeps
+  resolving from the copy. Comments (`#` and `//`) are handled as FeRx
+  handles them.
 
 - dictionary:
 
