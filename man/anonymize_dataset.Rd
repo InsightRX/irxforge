@@ -19,6 +19,7 @@ anonymize_dataset(
   similarity = c("energy"),
   score_on = c("concentration", "covariate"),
   seed = NULL,
+  design_cols = NULL,
   ...
 )
 }
@@ -110,6 +111,19 @@ run only once, on the selected covariate sample.}
 \item{seed}{optional integer seed used for covariate sampling and FeRx
 simulation. \code{NULL} (default) does not seed, so each call draws
 independently.}
+
+\item{design_cols}{optional character vector of study-design columns to
+carry through verbatim from the matched source design, e.g. analyte or
+readout selectors (\code{DVID}), occasion indices for IOV (\code{OCC}), L2 pairing
+indices (\code{PAIR}), carried dose history (\code{TLST}, \code{LASTDOSE}) or row filters
+used by the model (\code{FLAG}). Unlike \code{covariates}, these columns are never
+resampled, imputed or rounded: each anonymized subject receives the values
+of the observed subject whose dosing/observation design it clones, record by
+record. They are included in the data passed to the FeRx simulation, so the
+model can reference them, and in the returned dataset. Must not overlap with
+\code{covariates} or the mapped \code{ID}, \code{EVID}, \code{AMT}, \code{TIME}, \code{DV} and \code{RATE}
+columns. Columns already carried through as part of the event design (\code{CMT},
+\code{MDV}, \code{ADDL}, \code{II}, \code{SS}) are accepted and kept as usual.}
 
 \item{...}{additional arguments passed to the time-varying sampler selected
 by \code{method} (\code{\link[=sample_covariates_mice_timevarying]{sample_covariates_mice_timevarying()}},
