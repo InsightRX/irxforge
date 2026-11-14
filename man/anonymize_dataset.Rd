@@ -32,7 +32,23 @@ columns: covariate sampling is then skipped, and each observed subject's
 dosing/observation design is cloned (in random order) onto a renumbered
 subject \code{1:n} before the concentrations are simulated.}
 
-\item{model_file}{path to a FeRx model file used to simulate concentrations.}
+\item{model_file}{path to a FeRx model file used to simulate concentrations.
+The file is not used verbatim: a model written to fit the original data
+usually still describes that dataset, so the simulation runs on a temporary
+copy adapted to the anonymized dataset. In that copy the \verb{[data_selection]}
+block (whose filters refer to original records and columns) and the
+deprecated \verb{[initial_values]} block are removed; in the \verb{[data]} block,
+\code{path} is replaced by the absolute path of the simulation dataset, and a
+column map is kept only when it renames a sampled covariate (from
+\code{covariates}) whose new name does not collide with a column that remains
+under its own name after all retained renames are applied (renames are
+simultaneous, so \code{HTCM = WT} with \code{WT = HT} is kept). Maps onto or from
+the structural columns (e.g. \code{AMT = DOSE}, \code{DV = lndv}) are dropped,
+because the anonymized dataset already uses the canonical names \code{ID},
+\code{TIME}, \code{EVID}, \code{AMT}, \code{DV} and \code{RATE} (plus \code{CMT}, \code{MDV}, \code{ADDL}, \code{II}
+and \code{SS} when present in \code{data}). A relative \verb{[priors]} \code{from_fit} path is
+made absolute against the directory of \code{model_file}, so it keeps resolving
+from the copy. Comments (\verb{#} and \verb{//}) are handled as FeRx handles them.}
 
 \item{dictionary}{named list mapping expected NONMEM column names to columns
 in \code{data}. Supported keys are \code{ID}, \code{EVID}, \code{AMT}, \code{TIME}, \code{DV}, and
@@ -49,7 +65,9 @@ continuous.}
 addition to factor and character covariates (which are always treated as
 categorical). Use this for numerically coded categorical covariates, e.g.
 \code{SEX = 0/1}, so they are not sampled as continuous values. They are
-returned with their original numeric codes.}
+returned with their original numeric codes. With \code{method = "mice"}, a
+warning is raised for numeric covariates that look like categorical codes
+(whole numbers with at most 3 distinct values) but are not listed here.}
 
 \item{loq}{optional numeric limit of quantification. Simulated observations
 below \code{loq} are handled according to \code{blq_method}.}
@@ -107,8 +125,15 @@ model can reference them, and in the returned dataset. Must not overlap with
 columns. Columns already carried through as part of the event design (\code{CMT},
 \code{MDV}, \code{ADDL}, \code{II}, \code{SS}) are accepted and kept as usual.}
 
-\item{...}{additional arguments passed to
-\code{\link[=sample_covariates_mice_timevarying]{sample_covariates_mice_timevarying()}}.}
+\item{...}{additional arguments passed to the time-varying sampler selected
+by \code{method} (\code{\link[=sample_covariates_mice_timevarying]{sample_covariates_mice_timevarying()}},
+\code{\link[=sample_covariates_lme_timevarying]{sample_covariates_lme_timevarying()}} or
+\code{\link[=sample_covariates_copulas_timevarying]{sample_covariates_copulas_timevarying()}}) and, for \code{"mice"} and \code{"lme"},
+on to the internal MICE implementation (e.g. \code{maxit}). Every argument must
+be named and accepted by that sampler. Unknown names (typos, or arguments
+added in a newer irxforge release) and arguments that
+\code{anonymize_dataset()} sets itself (e.g. \code{id_var}, \code{n_subjects}) are
+rejected up front with an "unused argument" error.}
 }
 \value{
 anonymized NONMEM-style data.frame, with one block of records per

@@ -2,8 +2,10 @@
 #' (mice)
 #' 
 #' In contrast to sampling methods bootstrap and NHANES, categorical covariates
-#' need to be specified using the `cat_covs` argument, otherwise they will be 
-#' treated as continuous.
+#' need to be specified using the `cat_covs` argument, otherwise they will be
+#' treated as continuous. A warning is raised for numeric covariates that look
+#' like categorical codes (whole numbers with at most 3 distinct values, e.g.
+#' `SEX = 0/1`) but are not listed in `cat_covs`.
 #'
 #' @param data data.frame (n x p) containing the original, observed,
 #' time-invariant covariates (ID should not be included) that will be used to
@@ -51,10 +53,34 @@ sample_covariates_mice <- function(
   ...
 ) {
   cont_method <- match.arg(cont_method)
+  dedupe_mice_warnings(sample_covariates_mice_impl(
+    data = data,
+    cat_covs = cat_covs,
+    conditional = conditional,
+    n_subjects = n_subjects,
+    cont_method = cont_method,
+    replicates = replicates,
+    seed = seed,
+    ...
+  ))
+}
+
+#' @noRd
+sample_covariates_mice_impl <- function(
+  data,
+  cat_covs,
+  conditional,
+  n_subjects,
+  cont_method,
+  replicates,
+  seed,
+  ...
+) {
   if (!is.null(seed)) set.seed(seed)
 
   is_tbl <- tibble::is_tibble(data)
   data <- as.data.frame(data)
+  warn_integer_coded_covariates(data, names(data), cat_covs)
   data[cat_covs] <- lapply(data[cat_covs], as.factor)
   rownames(data) <- NULL
 

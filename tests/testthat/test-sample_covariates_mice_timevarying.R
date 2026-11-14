@@ -694,3 +694,24 @@ test_that("run_mice_simulation combines integer and factor categorical columns",
   expect_equal(as.character(out$SEX), c("1", "0"))
   expect_false(anyNA(out$WT))
 })
+
+test_that("integer-coded covariate warning is raised once per call", {
+  set.seed(1)
+  dat <- data.frame(
+    ID = rep(1:20, each = 3),
+    TIME = rep(c(0, 24, 48), 20),
+    WT = stats::rnorm(60, 70, 10),
+    SEX = rep(rep(c(0, 1), 10), each = 3)
+  )
+  warnings <- character()
+  withCallingHandlers(
+    sample_covariates_mice_timevarying(
+      dat, time_varying_covs = "WT", static_covs = "SEX", seed = 1, maxit = 2
+    ),
+    warning = function(w) {
+      warnings <<- c(warnings, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_length(grep("`SEX`", warnings), 1)
+})

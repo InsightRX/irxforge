@@ -278,6 +278,10 @@ sample_covariates_lme_timevarying <- function(
     list()
   }
 
+  # categorical covariates are only supported among the static covariates, so
+  # only check those for integer codes that were not declared in `cat_covs`
+  warn_integer_coded_covariates(data, static_covs, cat_covs)
+
   out <- vector("list", replicates)
   for (replicate_idx in seq_len(replicates)) {
     baseline <- sample_tv_baseline(

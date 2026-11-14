@@ -11,6 +11,22 @@
 #'   dosing/observation design is cloned (in random order) onto a renumbered
 #'   subject `1:n` before the concentrations are simulated.
 #' @param model_file path to a FeRx model file used to simulate concentrations.
+#'   The file is not used verbatim: a model written to fit the original data
+#'   usually still describes that dataset, so the simulation runs on a temporary
+#'   copy adapted to the anonymized dataset. In that copy the `[data_selection]`
+#'   block (whose filters refer to original records and columns) and the
+#'   deprecated `[initial_values]` block are removed; in the `[data]` block,
+#'   `path` is replaced by the absolute path of the simulation dataset, and a
+#'   column map is kept only when it renames a sampled covariate (from
+#'   `covariates`) whose new name does not collide with a column that remains
+#'   under its own name after all retained renames are applied (renames are
+#'   simultaneous, so `HTCM = WT` with `WT = HT` is kept). Maps onto or from
+#'   the structural columns (e.g. `AMT = DOSE`, `DV = lndv`) are dropped,
+#'   because the anonymized dataset already uses the canonical names `ID`,
+#'   `TIME`, `EVID`, `AMT`, `DV` and `RATE` (plus `CMT`, `MDV`, `ADDL`, `II`
+#'   and `SS` when present in `data`). A relative `[priors]` `from_fit` path is
+#'   made absolute against the directory of `model_file`, so it keeps resolving
+#'   from the copy. Comments (`#` and `//`) are handled as FeRx handles them.
 #' @param dictionary named list mapping expected NONMEM column names to columns
 #'   in `data`. Supported keys are `ID`, `EVID`, `AMT`, `TIME`, `DV`, and
 #'   optionally `RATE`. Defaults use the same names.
@@ -24,7 +40,9 @@
 #'   addition to factor and character covariates (which are always treated as
 #'   categorical). Use this for numerically coded categorical covariates, e.g.
 #'   `SEX = 0/1`, so they are not sampled as continuous values. They are
-#'   returned with their original numeric codes.
+#'   returned with their original numeric codes. With `method = "mice"`, a
+#'   warning is raised for numeric covariates that look like categorical codes
+#'   (whole numbers with at most 3 distinct values) but are not listed here.
 #' @param loq optional numeric limit of quantification. Simulated observations
 #'   below `loq` are handled according to `blq_method`.
 #' @param blq_method how to handle simulated observations below `loq`.
@@ -73,8 +91,15 @@
 #'   `covariates` or the mapped `ID`, `EVID`, `AMT`, `TIME`, `DV` and `RATE`
 #'   columns. Columns already carried through as part of the event design (`CMT`,
 #'   `MDV`, `ADDL`, `II`, `SS`) are accepted and kept as usual.
-#' @param ... additional arguments passed to
-#'   [sample_covariates_mice_timevarying()].
+#' @param ... additional arguments passed to the time-varying sampler selected
+#'   by `method` ([sample_covariates_mice_timevarying()],
+#'   [sample_covariates_lme_timevarying()] or
+#'   [sample_covariates_copulas_timevarying()]) and, for `"mice"` and `"lme"`,
+#'   on to the internal MICE implementation (e.g. `maxit`). Every argument must
+#'   be named and accepted by that sampler. Unknown names (typos, or arguments
+#'   added in a newer irxforge release) and arguments that
+#'   `anonymize_dataset()` sets itself (e.g. `id_var`, `n_subjects`) are
+#'   rejected up front with an "unused argument" error.
 #'
 #' @returns anonymized NONMEM-style data.frame, with one block of records per
 #'   anonymized subject (`ID` `1:n`). Each block is a clone of one observed
@@ -130,7 +155,12 @@ anonymize_dataset <- function(
       is.na(n_candidates) || n_candidates < 1 || n_candidates != round(n_candidates)) {
     stop("`n_candidates` must be a single positive integer.", call. = FALSE)
   }
-  replicates <- list(...)[["replicates"]]
+  # validate the `...` names before any of them is evaluated, so an unknown
+  # argument is reported as such even if evaluating it would fail
+  dots <- as.list(match.call(expand.dots = FALSE)$...)
+  check_anonymize_dots(names(dots), n_dots = length(dots), method = method)
+  # force only `replicates` (if supplied), leaving other promises untouched
+  replicates <- (function(..., replicates = NULL) replicates)(...)
   if (!is.null(replicates) && !identical(as.numeric(replicates), 1)) {
     stop(
       "`replicates` is not supported by `anonymize_dataset()`: each call ",
@@ -218,6 +248,81 @@ anonymize_dataset <- function(
   attr(result, "design_map") <- attr(selected$data, "design_map")
   attr(result, "similarity_score") <- selected$score
   result
+}
+
+#' Validate the names of the `...` arguments of [anonymize_dataset()]
+#'
+#' `...` is forwarded through several internal functions to the time-varying
+#' sampler selected by `method` (and, for MICE/LME, on to [mice_impute()]).
+#' Without an up-front check, a misspelled or unsupported argument either
+#' vanishes silently or surfaces deep in the call stack as a confusing error
+#' such as "formal argument ... matched by multiple actual arguments". This
+#' rejects unnamed arguments, arguments `anonymize_dataset()` already sets
+#' itself, and arguments the selected sampler does not accept.
+#'
+#' @param dot_names names of the `...` arguments (`NULL` if none are named).
+#' @param n_dots number of `...` arguments.
+#' @param method the selected sampler (`"mice"`, `"lme"` or `"copulas"`).
+#'
+#' @noRd
+check_anonymize_dots <- function(dot_names, n_dots, method) {
+  if (n_dots == 0) {
+    return(invisible(NULL))
+  }
+  if (length(dot_names) != n_dots || any(is.na(dot_names) | dot_names == "")) {
+    stop(
+      "All arguments passed to `anonymize_dataset()` through `...` must be named.",
+      call. = FALSE
+    )
+  }
+  # arguments anonymize_dataset() passes to the sampler (or to mice_impute())
+  # itself; supplying them again through `...` would clash
+  reserved <- c(
+    "data", "id_var", "time_var", "time_varying_covs", "cat_covs",
+    "design_match", "design_match_covs", "design_id_var", "n_subjects", "seed",
+    "method", "m"
+  )
+  sampler <- switch(
+    method,
+    mice = sample_covariates_mice_timevarying,
+    lme = sample_covariates_lme_timevarying,
+    copulas = sample_covariates_copulas_timevarying
+  )
+  accepted <- names(formals(sampler))
+  # MICE and LME forward their own `...` to the internal MICE implementation
+  if (method %in% c("mice", "lme")) {
+    accepted <- c(accepted, names(formals(mice_impute)))
+  }
+  accepted <- setdiff(accepted, c("...", reserved))
+
+  shadowing <- unique(intersect(dot_names, reserved))
+  if (length(shadowing) > 0) {
+    stop(
+      "Cannot pass ", paste0("`", shadowing, "`", collapse = ", "),
+      " to `anonymize_dataset()` through `...`: ",
+      if (length(shadowing) == 1) "it is" else "they are",
+      " set by `anonymize_dataset()` itself.",
+      call. = FALSE
+    )
+  }
+  unknown <- unique(setdiff(dot_names, accepted))
+  if (length(unknown) > 0) {
+    version <- tryCatch(
+      as.character(utils::packageVersion("irxforge")),
+      error = function(e) "unknown version"
+    )
+    stop(
+      "unused argument", if (length(unknown) > 1) "s", " ",
+      paste0("`", unknown, "`", collapse = ", "),
+      " in `anonymize_dataset()`: not supported by this build of irxforge (",
+      version, ") with `method = \"", method, "\"`. Check the spelling, or ",
+      "update irxforge if ", if (length(unknown) > 1) "these were" else "it was",
+      " added in a newer version. Arguments accepted through `...`: ",
+      paste0("`", accepted, "`", collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+  invisible(NULL)
 }
 
 #' Draw one time-varying covariate candidate with the chosen sampler
@@ -738,6 +843,67 @@ validate_anonymize_inputs <- function(data, covariates, model_file, dictionary, 
   if (!is.null(loq) && (!is.numeric(loq) || length(loq) != 1 || is.na(loq))) {
     stop("`loq` must be a single numeric value.", call. = FALSE)
   }
+  check_anonymize_observed_covariates(
+    data = data,
+    covariates = covariates,
+    id_var = dictionary$ID,
+    time_var = dictionary$TIME
+  )
+}
+
+#' Check that every covariate has observed values overall and at baseline
+#'
+#' The time-varying covariate samplers impute baseline covariates from the first
+#' record of each subject (after ordering by time), so a covariate that is
+#' entirely missing on those baseline rows cannot be imputed even when it is
+#' observed later on. This check fails fast, before any sampling or design
+#' matching, and names all offending covariates at once, distinguishing
+#' covariates with no observed values at all from those with no observed values
+#' at baseline only.
+#'
+#' @param data NONMEM-style data.frame.
+#' @param covariates character vector of covariate columns in `data`.
+#' @param id_var,time_var names of the subject ID and time columns in `data`.
+#'
+#' @returns `invisible(TRUE)`; errors when any covariate lacks observed values
+#'   overall or on the baseline rows.
+#'
+#' @noRd
+check_anonymize_observed_covariates <- function(data, covariates, id_var, time_var) {
+  if (length(covariates) == 0 || nrow(data) == 0) return(invisible(TRUE))
+  # baseline rows: first record per subject after a stable sort on ID and time
+  # (missing times last), mirroring the time-varying samplers
+  ord <- order(data[[id_var]], data[[time_var]], na.last = TRUE, method = "radix")
+  sorted_ids <- data[[id_var]][ord]
+  baseline_rows <- ord[!duplicated(sorted_ids)]
+  observed_any <- vapply(covariates, function(cov) any(!is.na(data[[cov]])), logical(1))
+  observed_baseline <- vapply(covariates, function(cov) {
+    any(!is.na(data[[cov]][baseline_rows]))
+  }, logical(1))
+  none <- covariates[!observed_any]
+  none_baseline <- covariates[observed_any & !observed_baseline]
+  if (length(none) == 0 && length(none_baseline) == 0) return(invisible(TRUE))
+  problems <- c(
+    if (length(none) > 0) {
+      paste0("no observed values: ", paste(none, collapse = ", "))
+    },
+    if (length(none_baseline) > 0) {
+      paste0(
+        "no observed values at baseline (first record per subject): ",
+        paste(none_baseline, collapse = ", ")
+      )
+    }
+  )
+  stop(
+    "Covariates cannot be imputed because they have ",
+    paste(problems, collapse = "; and "), ". ",
+    "Drop these covariates",
+    if (length(none_baseline) > 0) {
+      ", or reshape the data so they are observed on each subject's first record"
+    },
+    ".",
+    call. = FALSE
+  )
 }
 
 #' Check that time is non-decreasing within every subject
@@ -891,8 +1057,14 @@ simulate_anonymized_concentrations <- function(model_file, data, seed = NULL) {
   sim_data <- data
   sim_data_path <- tempfile(fileext = ".csv")
   utils::write.csv(sim_data, sim_data_path, row.names = FALSE, na = ".")
+  sim_model_path <- prepare_simulation_model_file(
+    model_file = model_file,
+    data_path = sim_data_path,
+    columns = names(sim_data)
+  )
+  on.exit(unlink(c(sim_data_path, sim_model_path)), add = TRUE)
   sim_args <- list(
-    model = model_file,
+    model = sim_model_path,
     data = sim_data_path,
     n_sim = 1L
   )
@@ -900,41 +1072,266 @@ simulate_anonymized_concentrations <- function(model_file, data, seed = NULL) {
   do.call(ferx::ferx_simulate, sim_args)
 }
 
+#' Structural columns of the anonymized simulation frame
+#'
+#' The anonymized frame built by [build_anonymized_simulation_input()] carries
+#' these columns under their canonical NONMEM names; every other column is a
+#' sampled covariate under its name in the source data.
+#'
+#' @noRd
+anonymized_structural_columns <- function() {
+  c("ID", "TIME", "EVID", "AMT", "RATE", "DV", "CMT", "MDV", "ADDL", "II", "SS", "CENS")
+}
+
+#' Write a simulation-ready copy of a FeRx model file
+#'
+#' A model file written to *fit* the original dataset usually still describes
+#' that dataset, which the anonymized simulation frame no longer matches. This
+#' writes a temporary copy of `model_file` adapted to the anonymized frame:
+#'
+#' * the `[data_selection]` block is removed: its filters refer to the original
+#'   records and columns, most of which de-identification dropped;
+#' * the deprecated `[initial_values]` block (no longer read by FeRx) is
+#'   removed;
+#' * in the `[data]` block, `path` is rewritten to the absolute path of the
+#'   simulation dataset (so it no longer depends on where the model file
+#'   lives), and a column map `<target> = <source>` is kept only when it
+#'   renames a sampled covariate that is present in the anonymized frame and
+#'   its target does not collide with a column left in place by the retained
+#'   renames (see `retain_data_maps()`). Maps onto (or from) the
+#'   structural columns are dropped, because the anonymized frame already uses
+#'   the canonical names (`ID`, `TIME`, `EVID`, `AMT`, `DV`, ...).
+#'
+#' * a relative `[priors]` `from_fit` path, which FeRx resolves against the
+#'   model file's directory, is made absolute against the directory of
+#'   `model_file`, so it still resolves from the relocated copy.
+#'
+#' Lines are classified after stripping `#` and `//` comments, as FeRx does.
+#' All other lines, including comments, are copied verbatim.
+#'
+#' @param model_file path to the original FeRx model file.
+#' @param data_path path to the simulation dataset (CSV).
+#' @param columns column names of the simulation dataset.
+#' @param path path to write the simulation copy to. Defaults to a temporary
+#'   `.ferx` file.
+#'
+#' @returns `path`, invisibly.
+#'
+#' @noRd
+prepare_simulation_model_file <- function(
+  model_file,
+  data_path,
+  columns,
+  path = tempfile(fileext = ".ferx")
+) {
+  lines <- readLines(model_file, warn = FALSE)
+  model_dir <- dirname(normalizePath(model_file, winslash = "/", mustWork = FALSE))
+  # Comments are stripped the way FeRx does (`#` and `//`) before any line is
+  # classified, so a commented header or key is read as FeRx reads it.
+  stripped <- strip_ferx_comment(lines)
+  header_re <- "^\\s*\\[\\s*([A-Za-z_][A-Za-z0-9_]*)(\\s+[^]]*)?\\]\\s*$"
+  is_header <- grepl(header_re, stripped)
+  block <- rep(NA_character_, length(lines))
+  current <- NA_character_
+  for (i in seq_along(lines)) {
+    if (is_header[i]) {
+      current <- tolower(sub(header_re, "\\1", stripped[i]))
+    }
+    block[i] <- current
+  }
+  split_key_value <- function(i) {
+    content <- trimws(stripped[i])
+    if (!nzchar(content) || !grepl("=", content, fixed = TRUE)) return(NULL)
+    value <- trimws(sub("^[^=]*=", "", content))
+    list(
+      key = trimws(sub("=.*$", "", content)),
+      value = gsub("^[\"']|[\"']$", "", value)
+    )
+  }
+  indent_of <- function(i) sub("^(\\s*).*$", "\\1", lines[i])
+
+  # `[priors] from_fit` is resolved by FeRx against the model file's directory;
+  # the copy lives elsewhere, so make a relative reference absolute against the
+  # original model's directory.
+  for (i in which(!is_header & !is.na(block) & block == "priors")) {
+    kv <- split_key_value(i)
+    if (is.null(kv) || kv$key != "from_fit" || !nzchar(kv$value)) next
+    if (!is_absolute_path(kv$value)) {
+      abs_fit <- normalizePath(
+        file.path(model_dir, kv$value), winslash = "/", mustWork = FALSE
+      )
+      lines[i] <- paste0(indent_of(i), "from_fit = \"", abs_fit, "\"")
+    }
+  }
+
+  drop_blocks <- c("data_selection", "initial_values")
+  keep <- is.na(block) | !block %in% drop_blocks
+
+  data_body <- which(!is_header & !is.na(block) & block == "data")
+  if (length(data_body) > 0) {
+    covariate_cols <- setdiff(columns, anonymized_structural_columns())
+    path_written <- FALSE
+    abs_data_path <- normalizePath(data_path, winslash = "/", mustWork = FALSE)
+    map_idx <- integer(0)
+    map_target <- character(0)
+    map_source <- character(0)
+    for (i in data_body) {
+      kv <- split_key_value(i)
+      if (is.null(kv)) next
+      key <- kv$key
+      value <- kv$value
+      if (tolower(key) == "path") {
+        if (path_written) {
+          keep[i] <- FALSE
+        } else {
+          lines[i] <- paste0(indent_of(i), "path = \"", abs_data_path, "\"")
+          path_written <- TRUE
+        }
+        next
+      }
+      if (toupper(value) %in% toupper(covariate_cols)) {
+        map_idx <- c(map_idx, i)
+        map_target <- c(map_target, toupper(key))
+        map_source <- c(map_source, toupper(value))
+      } else {
+        keep[i] <- FALSE
+      }
+    }
+    keep[map_idx[!retain_data_maps(map_target, map_source, toupper(columns))]] <- FALSE
+    if (!path_written) {
+      # A `[data]` block without `path` fails to parse; add the simulation path
+      # right after the block header.
+      header_idx <- which(is_header & block == "data")[1]
+      lines <- append(
+        lines,
+        paste0("  path = \"", abs_data_path, "\""),
+        after = header_idx
+      )
+      keep <- append(keep, TRUE, after = header_idx)
+    }
+  }
+
+  writeLines(lines[keep], path)
+  invisible(path)
+}
+
+#' Strip a trailing FeRx line comment
+#'
+#' FeRx ends a model-file line at the first `#` or `//`, whichever comes first
+#' (`strip_line_comment()` in ferx-core). Vectorized over `lines`.
+#'
+#' @noRd
+strip_ferx_comment <- function(lines) {
+  sub("(#|//).*$", "", lines)
+}
+
+#' Whether a file path is absolute (POSIX, home-relative or Windows)
+#'
+#' @noRd
+is_absolute_path <- function(path) {
+  grepl("^(/|~|[A-Za-z]:[/\\\\]|\\\\\\\\)", path)
+}
+
+#' Decide which `[data]` column renames can be applied together
+#'
+#' FeRx resolves all `[data]` renames against the original headers at once, so
+#' a rename may target a column that another retained rename moves aside (e.g.
+#' `HTCM = WT` together with `WT = HT`). A rename is retained when its target
+#' is not mapped by an earlier retained rename and does not collide with a
+#' column that survives under its own name, i.e. one that no retained rename
+#' moves away. Dropping a rename puts its source column back under its own
+#' name, which can create new collisions, so this iterates to a fixed point.
+#'
+#' @param target,source upper-cased targets and sources of the candidate
+#'   renames (sources are already known to be present in the data).
+#' @param columns upper-cased column names of the simulation dataset.
+#'
+#' @returns logical vector, `TRUE` for renames to keep.
+#'
+#' @noRd
+retain_data_maps <- function(target, source, columns) {
+  keep <- !duplicated(target) & !duplicated(source)
+  repeat {
+    surviving <- setdiff(columns, source[keep & target != source])
+    collides <- keep & target != source & target %in% surviving
+    if (!any(collides)) break
+    keep <- keep & !collides
+  }
+  keep
+}
+
 apply_simulated_concentrations <- function(data, sim) {
   if (!"DV_SIM" %in% names(sim)) {
     stop("FeRx simulation output must contain a `DV_SIM` column.", call. = FALSE)
   }
-  obs_idx <- which(data$EVID == 0)
-  if (length(obs_idx) != nrow(sim)) {
-    stop(
-      "FeRx simulation row count does not match the number of observation records.",
-      call. = FALSE
-    )
+  # FeRx only simulates records that carry an observation: `EVID == 0` rows
+  # flagged `MDV == 1` (e.g. scheduled samples that were never taken) get no
+  # simulated row. Count observations the same way, and give those records a
+  # missing `DV` so they keep `MDV = 1` downstream.
+  evid_obs <- !is.na(data$EVID) & data$EVID == 0
+  if ("MDV" %in% names(data)) {
+    mdv_flagged <- evid_obs & !is.na(data$MDV) & data$MDV != 0
+  } else {
+    mdv_flagged <- rep(FALSE, nrow(data))
   }
+  obs_idx <- which(evid_obs & !mdv_flagged)
+  if (length(obs_idx) != nrow(sim)) {
+    n_evid_obs <- sum(evid_obs)
+    if (n_evid_obs == nrow(sim)) {
+      # FeRx returned a row for every `EVID == 0` record, including the
+      # `MDV == 1` ones; use them all.
+      obs_idx <- which(evid_obs)
+      mdv_flagged <- rep(FALSE, nrow(data))
+    } else {
+      msg <- paste0(
+        "FeRx returned ", nrow(sim), " rows for ", n_evid_obs,
+        " `EVID == 0` records"
+      )
+      n_flagged <- sum(mdv_flagged)
+      if (n_flagged > 0) {
+        msg <- paste0(
+          msg, ". ", n_flagged, " of them are flagged `MDV == 1` and carry no ",
+          "observation, leaving ", length(obs_idx), " observation records; ",
+          "the remaining mismatch could not be explained."
+        )
+      } else {
+        msg <- paste0(msg, "; expected one simulated row per observation record.")
+      }
+      stop(msg, call. = FALSE)
+    }
+  }
+  data[["DV"]][mdv_flagged] <- NA
   # Match simulated concentrations back onto observation rows by ID and TIME
   # (and CMT when available) rather than by position: FeRx is not guaranteed to
   # return rows in the input order, so a positional copy can silently scramble
   # subjects/timepoints. Records sharing the same key (e.g. replicate samples)
   # are matched in order of occurrence via `.occ`.
   if (all(c("ID", "TIME") %in% names(sim))) {
-    keys <- c("ID", "TIME")
-    if ("CMT" %in% names(sim) && "CMT" %in% names(data)) keys <- c(keys, "CMT")
-    occurrence <- function(df) {
-      grp <- interaction(df[keys], drop = TRUE, lex.order = TRUE)
-      stats::ave(seq_len(nrow(df)), grp, FUN = seq_along)
+    obs <- data[obs_idx, intersect(c("ID", "TIME", "CMT"), names(data)), drop = FALSE]
+    sim_keyed <- sim
+    if ("CMT" %in% names(sim) && "CMT" %in% names(data)) {
+      # A blank `CMT` on an observation record means "the model's default
+      # compartment", and an `NA` key matches nothing in `merge()`. Fill blanks
+      # the way FeRx does (compartment 1) on both sides so populated
+      # compartments still disambiguate records sharing ID/TIME.
+      obs$CMT[is.na(obs$CMT)] <- 1
+      sim_keyed$CMT[is.na(sim_keyed$CMT)] <- 1
+      merged <- match_sim_by_keys(obs, sim_keyed, c("ID", "TIME", "CMT"))
+      if (is.null(merged) &&
+          (anyNA(data$CMT[obs_idx]) || anyNA(sim$CMT)) &&
+          !any_key_spans_compartments(data[obs_idx, , drop = FALSE])) {
+        # The default compartment FeRx assigned to blank records differs from
+        # 1. Without CMT, records are matched by ID/TIME and occurrence; that
+        # is only safe when no ID/TIME pair is observed in more than one
+        # compartment, which was just checked.
+        merged <- match_sim_by_keys(obs, sim_keyed, c("ID", "TIME"))
+      }
+      keys <- c("ID", "TIME", "CMT")
+    } else {
+      keys <- c("ID", "TIME")
+      merged <- match_sim_by_keys(obs, sim_keyed, keys)
     }
-    obs <- data[obs_idx, keys, drop = FALSE]
-    obs[[".obs_order"]] <- seq_along(obs_idx)
-    obs[[".occ"]] <- occurrence(obs)
-    sim_keyed <- sim[, c(keys, "DV_SIM"), drop = FALSE]
-    sim_keyed[[".occ"]] <- occurrence(sim_keyed)
-    merged <- merge(
-      obs,
-      sim_keyed,
-      by = c(keys, ".occ"),
-      sort = FALSE
-    )
-    if (nrow(merged) != length(obs_idx)) {
+    if (is.null(merged)) {
       stop(
         "FeRx simulation output could not be uniquely matched to observation ",
         "records by ", paste(keys, collapse = ", "), ".",
@@ -947,6 +1344,34 @@ apply_simulated_concentrations <- function(data, sim) {
     data[["DV"]][obs_idx] <- sim[["DV_SIM"]]
   }
   data
+}
+
+# Match FeRx `sim` rows onto observation rows `obs` by `keys`, pairing records
+# that share a key in order of occurrence. Returns the merged rows (with
+# `.obs_order` and `DV_SIM` columns), or `NULL` when the rows cannot all be matched one-to-one.
+match_sim_by_keys <- function(obs, sim, keys) {
+  occurrence <- function(df) {
+    grp <- interaction(df[keys], drop = TRUE, lex.order = TRUE)
+    stats::ave(seq_len(nrow(df)), grp, FUN = seq_along)
+  }
+  obs <- obs[, keys, drop = FALSE]
+  obs[[".obs_order"]] <- seq_len(nrow(obs))
+  obs[[".occ"]] <- occurrence(obs)
+  sim <- sim[, c(keys, "DV_SIM"), drop = FALSE]
+  sim[[".occ"]] <- occurrence(sim)
+  merged <- merge(obs, sim, by = c(keys, ".occ"), sort = FALSE)
+  if (nrow(merged) != nrow(obs)) return(NULL)
+  merged
+}
+
+# TRUE when some ID/TIME pair among the observation records appears with more
+# than one distinct CMT value (a blank CMT counts as its own value).
+any_key_spans_compartments <- function(obs) {
+  cmt <- ifelse(is.na(obs$CMT), "<NA>", as.character(obs$CMT))
+  n_cmt <- tapply(cmt, paste(obs$ID, obs$TIME, sep = "\r"), function(x) {
+    length(unique(x))
+  })
+  any(n_cmt > 1)
 }
 
 #' Recompute MDV from the final EVID and DV values

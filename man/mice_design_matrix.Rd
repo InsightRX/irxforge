@@ -10,7 +10,8 @@ mice_design_matrix(df)
 \item{df}{data.frame with complete predictor data}
 }
 \value{
-numeric matrix
+numeric matrix, with column names identifying the predictor (and
+factor level) of each column; the first column is the intercept
 }
 \description{
 Factors are dummy-coded, and constant predictors are dropped.
