@@ -1,5 +1,15 @@
 # irxforge (development version)
 
+* `anonymize_dataset()`: a covariate that the model references under a spelling
+  that differs only by case from its data column (e.g. `CONC0` for a `conc0`
+  column) is now bridged with an added `[data]` rename (`CONC0 = conc0`) in the
+  simulation copy of `model_file`, since FeRx matches covariate names
+  case-sensitively. The model's covariate references are checked before any
+  covariate is sampled: a reference that matches several columns
+  case-insensitively fails with an error naming the columns, and a reference to
+  a column of `data` that is not in `covariates` raises a warning, instead of
+  the simulation failing partway through with `E_MISSING_COVARIATE` (#43).
+
 * `anonymize_dataset()`: arguments passed through `...` are now validated up
   front against the time-varying sampler selected by `method` (and, for `"mice"`
   and `"lme"`, the internal MICE implementation). Unknown names (typos, or
