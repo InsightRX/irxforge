@@ -25,7 +25,8 @@ sample_covariates_lme_timevarying(
   cont_method = "pmm",
   replicates = 1,
   seed = NULL,
-  ...
+  ...,
+  max_cat_levels = 20
 )
 }
 \arguments{
@@ -118,6 +119,14 @@ Default \code{NULL} does not set a seed.}
 
 \item{...}{additional arguments passed to \code{\link[=sample_covariates_mice]{sample_covariates_mice()}} for the
 baseline sample.}
+
+\item{max_cat_levels}{maximum number of distinct values allowed for a
+categorical covariate (listed in \code{cat_covs}, or a factor/character
+column). Default \code{20}. Covariates with more levels are rejected up front
+with an error that reports the level count of each categorical covariate,
+because they are almost always continuous columns passed as categorical by
+mistake and make the polytomous imputation extremely slow. Use \code{Inf} to
+disable.}
 }
 \value{
 long-format data.frame with simulated subject IDs, time, static

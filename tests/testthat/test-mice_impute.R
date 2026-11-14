@@ -261,3 +261,49 @@ test_that("warn_integer_coded_covariates flags likely categorical codes", {
     warn_integer_coded_covariates(dat, names(dat), cat_covs = c("SEX", "FED"))
   )
 })
+
+test_that("check_cat_covs_levels rejects categorical covariates with many levels", {
+  dat <- data.frame(
+    PRT = seq(0.5, 50, by = 0.5),
+    SEX = rep(0:1, 50),
+    RACE = rep(letters[1:4], 25),
+    WT = seq(50, 99)
+  )
+  # within the limit: returns the level count of each categorical covariate
+  expect_equal(
+    check_cat_covs_levels(dat, names(dat), cat_covs = "SEX"),
+    c(SEX = 2L, RACE = 4L)
+  )
+  err <- expect_error(
+    check_cat_covs_levels(dat, names(dat), cat_covs = c("PRT", "SEX")),
+    class = "irxforge_cat_levels_error"
+  )
+  expect_match(conditionMessage(err), "`PRT` \\(100 levels\\)")
+  expect_match(conditionMessage(err), "more than 20 levels")
+  expect_match(conditionMessage(err), "`SEX` = 2, `RACE` = 4")
+  expect_false(grepl("`SEX` \\(", conditionMessage(err)))
+  # character/factor columns are checked even when not listed in `cat_covs`
+  dat$CHR <- as.character(dat$PRT)
+  expect_error(
+    check_cat_covs_levels(dat, "CHR"),
+    "`CHR` \\(100 levels\\)"
+  )
+  # the limit is configurable and can be disabled
+  expect_silent(check_cat_covs_levels(dat, names(dat), "PRT", max_cat_levels = 100))
+  expect_silent(check_cat_covs_levels(dat, names(dat), "PRT", max_cat_levels = Inf))
+  expect_error(
+    check_cat_covs_levels(dat, names(dat), "PRT", max_cat_levels = 99),
+    class = "irxforge_cat_levels_error"
+  )
+  # missing values are not counted as a level
+  dat$SEX[1:5] <- NA
+  expect_equal(check_cat_covs_levels(dat, "SEX", "SEX")[["SEX"]], 2L)
+  expect_error(
+    check_cat_covs_levels(dat, "SEX", "SEX", max_cat_levels = 1),
+    "`max_cat_levels` must be a single number"
+  )
+  expect_error(
+    check_cat_covs_levels(dat, "SEX", "SEX", max_cat_levels = NA_real_),
+    "`max_cat_levels` must be a single number"
+  )
+})

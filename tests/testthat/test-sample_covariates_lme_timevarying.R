@@ -483,3 +483,23 @@ test_that("saturated OLS fallback gives a zero (not NaN) residual SD", {
   )
   expect_equal(models$WT$sigma, 0)
 })
+
+test_that("static categorical covariates with too many levels are rejected", {
+  dat <- data.frame(
+    ID = rep(1:25, each = 2),
+    TIME = rep(c(0, 1), times = 25),
+    CENTER = rep(1:25, each = 2),
+    WT = rep(seq(50, 98, by = 2), each = 2) + rep(c(0, 1), 25)
+  )
+  local_mocked_bindings(
+    fit_lme_transition_models = function(...) stop("fitting should not be reached")
+  )
+  expect_error(
+    sample_covariates_lme_timevarying(
+      dat, static_covs = "CENTER", time_varying_covs = "WT",
+      cat_covs = "CENTER"
+    ),
+    "`CENTER` \\(25 levels\\)",
+    class = "irxforge_cat_levels_error"
+  )
+})

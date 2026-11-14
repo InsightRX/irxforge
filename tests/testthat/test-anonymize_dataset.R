@@ -1444,3 +1444,32 @@ test_that("anonymize_dataset forwards accepted `...` arguments to the sampler", 
   anonymize_dataset(dat, covariates = "WT", model_file = model, maxit = 7)
   expect_equal(received, list(maxit = 7))
 })
+
+test_that("a cat_covs entry with implausibly many levels is rejected before sampling", {
+  # e.g. a clock column (time of previous reset) passed in `cat_covs`
+  dat <- data.frame(
+    ID = rep(1:30, each = 2), TIME = rep(c(0, 1), 30),
+    EVID = rep(c(1, 0), 30), AMT = rep(c(100, 0), 30),
+    DV = rep(c(0, 5), 30),
+    PRT = seq(0.5, 30, by = 0.5),
+    WT = rep(seq(50, 108, by = 2), each = 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    simulate_anonymized_concentrations = function(...) {
+      stop("simulation should not be reached")
+    }
+  )
+  expect_error(
+    anonymize_dataset(
+      dat, covariates = c("PRT", "WT"), model_file = model, cat_covs = "PRT"
+    ),
+    "`PRT` \\(60 levels\\)",
+    class = "irxforge_cat_levels_error"
+  )
+  # `max_cat_levels` is accepted through `...`
+  expect_no_error(
+    check_anonymize_dots("max_cat_levels", 1, method = "mice")
+  )
+})

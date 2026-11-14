@@ -52,6 +52,7 @@ sample_tv_baseline <- function(
   conditional,
   n_subjects,
   cont_method,
+  max_cat_levels = 20,
   ...
 ) {
   if (baseline_method == "bootstrap") {
@@ -83,6 +84,7 @@ sample_tv_baseline <- function(
       cont_method = cont_method,
       replicates = 1,
       seed = NULL,
+      max_cat_levels = max_cat_levels,
       ...
     ),
     irxforge_integer_coded_warning = function(w) invokeRestart("muffleWarning")

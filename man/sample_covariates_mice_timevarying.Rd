@@ -24,6 +24,7 @@ sample_covariates_mice_timevarying(
   replicates = 1,
   seed = NULL,
   ...,
+  max_cat_levels = 20,
   min_donors = 1000,
   progress = interactive()
 )
@@ -108,6 +109,14 @@ Default \code{NULL} does not set a seed.}
 
 \item{...}{additional arguments passed to the internal MICE implementation
 (e.g. \code{maxit}).}
+
+\item{max_cat_levels}{maximum number of distinct values allowed for a
+categorical covariate (listed in \code{cat_covs}, or a factor/character
+column). Default \code{20}. Covariates with more levels are rejected up front
+with an error that reports the level count of each categorical covariate,
+because they are almost always continuous columns passed as categorical by
+mistake and make the polytomous imputation extremely slow. Use \code{Inf} to
+disable.}
 
 \item{min_donors}{minimum number of observed transitions used as donors
 when imputing each time index. Transitions are pooled by their time index
