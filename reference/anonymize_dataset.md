@@ -89,7 +89,13 @@ anonymize_dataset(
   are returned with their original numeric codes. With
   `method = "mice"`, a warning is raised for numeric covariates that
   look like categorical codes (whole numbers with at most 3 distinct
-  values) but are not listed here.
+  values) but are not listed here. Categorical covariates (including
+  factor and character columns) with more than 20 distinct values are
+  rejected with an error reporting the level count of each categorical
+  covariate: such a column is almost always a continuous one (e.g. a
+  time, dose or occasion counter) passed as categorical by mistake, and
+  would make the MICE sampler extremely slow. Pass `max_cat_levels`
+  (through `...`) to raise this limit.
 
 - loq:
 

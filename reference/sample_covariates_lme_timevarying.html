@@ -87,7 +87,8 @@ simulated subject.</p>
 <span>  cont_method <span class="op">=</span> <span class="st">"pmm"</span>,</span>
 <span>  replicates <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  <span class="va">...</span></span>
+<span>  <span class="va">...</span>,</span>
+<span>  max_cat_levels <span class="op">=</span> <span class="fl">20</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -225,6 +226,16 @@ Default <code>NULL</code> does not set a seed.</p></dd>
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>additional arguments passed to <code><a href="sample_covariates_mice.html">sample_covariates_mice()</a></code> for the
 baseline sample.</p></dd>
+
+
+<dt id="arg-max-cat-levels">max_cat_levels<a class="anchor" aria-label="anchor" href="#arg-max-cat-levels"></a></dt>
+<dd><p>maximum number of distinct values allowed for a
+categorical covariate (listed in <code>cat_covs</code>, or a factor/character
+column). Default <code>20</code>. Covariates with more levels are rejected up front
+with an error that reports the level count of each categorical covariate,
+because they are almost always continuous columns passed as categorical by
+mistake and make the polytomous imputation extremely slow. Use <code>Inf</code> to
+disable.</p></dd>
 
 </dl></div>
     <div class="section level2">

@@ -62,7 +62,8 @@ like categorical codes (whole numbers with at most 3 distinct values, e.g.
 <span>  cont_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"pmm"</span>, <span class="st">"norm"</span><span class="op">)</span>,</span>
 <span>  replicates <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  seed <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  <span class="va">...</span></span>
+<span>  <span class="va">...</span>,</span>
+<span>  max_cat_levels <span class="op">=</span> <span class="fl">20</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -114,6 +115,15 @@ Default <code>NULL</code> does not set a seed.</p></dd>
 <dd><p>additional arguments passed to the internal MICE implementation,
 e.g. <code>maxit</code> (number of iterations, default 5) or <code>donors</code> (number of
 donors for predictive mean matching, default 5).</p></dd>
+
+
+<dt id="arg-max-cat-levels">max_cat_levels<a class="anchor" aria-label="anchor" href="#arg-max-cat-levels"></a></dt>
+<dd><p>maximum number of distinct values allowed for a
+categorical covariate (listed in <code>cat_covs</code>, or a factor/character column).
+Default <code>20</code>. Covariates with more levels are rejected up front with an
+error that reports the level count of each categorical covariate, because
+they are almost always continuous columns passed as categorical by mistake
+and make the polytomous imputation extremely slow. Use <code>Inf</code> to disable.</p></dd>
 
 </dl></div>
     <div class="section level2">

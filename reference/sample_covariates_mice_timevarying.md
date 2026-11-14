@@ -29,6 +29,7 @@ sample_covariates_mice_timevarying(
   replicates = 1,
   seed = NULL,
   ...,
+  max_cat_levels = 20,
   min_donors = 1000,
   progress = interactive()
 )
@@ -158,6 +159,16 @@ sample_covariates_mice_timevarying(
 
   additional arguments passed to the internal MICE implementation (e.g.
   `maxit`).
+
+- max_cat_levels:
+
+  maximum number of distinct values allowed for a categorical covariate
+  (listed in `cat_covs`, or a factor/character column). Default `20`.
+  Covariates with more levels are rejected up front with an error that
+  reports the level count of each categorical covariate, because they
+  are almost always continuous columns passed as categorical by mistake
+  and make the polytomous imputation extremely slow. Use `Inf` to
+  disable.
 
 - min_donors:
 
