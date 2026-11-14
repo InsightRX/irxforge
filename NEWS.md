@@ -8,7 +8,10 @@
   covariate is sampled: a reference that matches several columns
   case-insensitively fails with an error naming the columns, and a reference to
   a column of `data` that is not in `covariates` raises a warning, instead of
-  the simulation failing partway through with `E_MISSING_COVARIATE` (#43).
+  the simulation failing partway through with `E_MISSING_COVARIATE`. FeRx
+  grammar words (e.g. the `pk` keyword) and ODE state names are not treated as
+  covariate references, and a column the model references under its exact
+  spelling is never renamed (#43).
 
 * `anonymize_dataset()`: arguments passed through `...` are now validated up
   front against the time-varying sampler selected by `method` (and, for `"mice"`

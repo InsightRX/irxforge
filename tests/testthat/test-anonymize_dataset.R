@@ -1296,7 +1296,7 @@ test_that("ferx_model_identifiers separates references from definitions and call
   )
   parsed <- parse_ferx_model_lines(lines)
   ids <- ferx_model_identifiers(parsed$stripped, parsed$block, parsed$is_header)
-  expect_setequal(ids$referenced, c("WT", "SEX", "CONC0", "else", "pk"))
+  expect_setequal(ids$referenced, c("WT", "SEX", "CONC0"))
   expect_true(all(c("TVCL", "ETA_CL", "CL", "V", "CENT", "cl", "v") %in% ids$defined))
 })
 
@@ -1422,5 +1422,84 @@ test_that("anonymize_dataset simulates a model naming a covariate in another cas
   writeLines(c(src, "[data]", paste0("  path = ", ex$data)), model)
   out <- anonymize_dataset(dat, covariates = "wt", model_file = model, seed = 3)
   expect_true("wt" %in% names(out))
+  expect_true(all(is.finite(out$DV[out$EVID == 0 & out$MDV == 0])))
+})
+
+test_that("ferx_model_identifiers treats ODE states and grammar words as non-covariates", {
+  lines <- c(
+    "[structural_model]",
+    "  ode(obs_cmt=central, states=[depot, central])",
+    "[odes]",
+    "  d/dt(depot) = -KA * depot",
+    "  d/dt(central) = KA * depot - CL / V * central * PK",
+    "[scaling]",
+    "  y = central / V"
+  )
+  parsed <- parse_ferx_model_lines(lines)
+  ids <- ferx_model_identifiers(parsed$stripped, parsed$block, parsed$is_header)
+  expect_setequal(ids$referenced, c("KA", "CL", "V", "PK"))
+  expect_true(all(c("depot", "central") %in% ids$defined))
+})
+
+test_that("prepare_simulation_model_file never renames an exactly referenced column away", {
+  # `pk` is the FeRx structural keyword; the `PK` covariate column must keep
+  # its name rather than be bridged to `pk`
+  model <- tempfile(fileext = ".ferx")
+  writeLines(c(
+    "[individual_parameters]",
+    "  CL = TVCL * (1 + PK)",
+    "[structural_model]",
+    "  pk one_cpt_oral(cl=CL, v=V, ka=KA)",
+    "[data]",
+    "  path = x.csv"
+  ), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV", "PK")
+  )
+  expect_false(any(grepl("^\\s*pk\\s*=", readLines(out))))
+
+  # an ODE state that differs only by case from a covariate column is not
+  # a covariate reference, and the exactly referenced column stays put
+  writeLines(c(
+    "[structural_model]",
+    "  ode(obs_cmt=central, states=[depot, central])",
+    "[odes]",
+    "  d/dt(depot) = -KA * depot",
+    "  d/dt(central) = KA * depot - CL / V * central * DEPOT",
+    "[data]",
+    "  path = x.csv"
+  ), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV", "DEPOT", "CENTRAL")
+  )
+  expect_false(any(grepl("depot =|central =", readLines(out))))
+
+  # a heuristic false positive that collides with an exact reference is not
+  # reported as an ambiguity either
+  writeLines(c(
+    "[individual_parameters]",
+    "  CL = TVCL * WT * Wt",
+    "[data]",
+    "  path = x.csv"
+  ), model)
+  out <- prepare_simulation_model_file(
+    model, tempfile(fileext = ".csv"), c("ID", "TIME", "DV", "WT")
+  )
+  expect_false(any(grepl("Wt =", readLines(out))))
+})
+
+test_that("anonymize_dataset keeps an upper-case PK covariate next to the `pk` keyword", {
+  skip_if_not_installed("ferx")
+  ex <- ferx::ferx_example("warfarin")
+  dat <- utils::read.csv(ex$data, na.strings = ".")
+  dat <- dat[dat$ID %in% 1:6, ]
+  dat$PK <- 0.1 * dat$ID
+  model <- tempfile(fileext = ".ferx")
+  src <- readLines(ex$model)
+  src <- sub("CL = TVCL * exp(ETA_CL)", "CL = TVCL * (1 + PK) * exp(ETA_CL)",
+             src, fixed = TRUE)
+  writeLines(c(src, "[data]", paste0("  path = ", ex$data)), model)
+  out <- anonymize_dataset(dat, covariates = "PK", model_file = model, seed = 3)
+  expect_true("PK" %in% names(out))
   expect_true(all(is.finite(out$DV[out$EVID == 0 & out$MDV == 0])))
 })

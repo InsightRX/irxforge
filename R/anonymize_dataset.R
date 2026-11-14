@@ -1236,16 +1236,47 @@ ferx_model_identifiers <- function(stripped, block, is_header) {
     "priors", "simulation", "output"
   )
   expr_text <- text[body & !block %in% non_expression]
+  # ODE compartments: `states = [a, b]`, `d/dt(a)` and `obs_cmt = a`
+  state_lists <- extract(expr_text, "states\\s*=\\s*\\[[^]]*\\]")
+  states <- c(
+    extract(sub("^[^[]*", "", state_lists), ident_re),
+    sub("^d\\s*/\\s*dt\\s*\\(\\s*", "", extract(
+      expr_text, "(?<![A-Za-z0-9_])d\\s*/\\s*dt\\s*\\(\\s*[A-Za-z_][A-Za-z0-9_]*"
+    )),
+    sub("^obs_cmt\\s*=\\s*", "", extract(
+      expr_text, "(?<![A-Za-z0-9_])obs_cmt\\s*=\\s*[A-Za-z_][A-Za-z0-9_]*"
+    ))
+  )
   defined <- unique(c(
     extract(param_text, ident_re),
-    extract(expr_text, paste0(ident_re, "(?=\\s*=(?!=))"))
+    extract(expr_text, paste0(ident_re, "(?=\\s*=(?!=))")),
+    states
   ))
   calls <- extract(expr_text, paste0(ident_re, "(?=\\s*\\()"))
   referenced <- extract(expr_text, paste0(ident_re, "(?![A-Za-z0-9_])(?!\\s*[(=])"))
   # `==` comparisons are references, not assignments
   referenced <- c(referenced, extract(expr_text, paste0(ident_re, "(?=\\s*==)")))
-  referenced <- setdiff(unique(referenced), c(defined, calls))
+  referenced <- setdiff(unique(referenced), c(defined, calls, ferx_grammar_tokens()))
   list(referenced = referenced, defined = defined)
+}
+
+#' FeRx grammar keywords that are never covariate references
+#'
+#' Bare words of the model-file syntax that the identifier scan would
+#' otherwise read as references: structural-model keywords (`pk`, `ode`,
+#' `ode_template`), the `d/dt` derivative notation, conditional and logical
+#' keywords, `[covariates]` type words, and literals. Matched exactly (FeRx
+#' keywords are lower case), so an upper-case `PK` covariate is still a
+#' reference.
+#'
+#' @noRd
+ferx_grammar_tokens <- function() {
+  c(
+    "pk", "ode", "ode_template", "d", "dt", "states", "obs_cmt",
+    "if", "then", "else", "elif", "elseif", "end", "and", "or", "not",
+    "continuous", "cont", "categorical", "cat", "levels", "auto",
+    "true", "false", "TRUE", "FALSE", "inf", "Inf", "nan", "NaN"
+  )
 }
 
 #' `[data]` renames that bridge case-only covariate name differences
@@ -1257,7 +1288,8 @@ ferx_model_identifiers <- function(stripped, block, is_header) {
 #' column available under the model's spelling. A reference that matches
 #' several columns case-insensitively, or several references that differ only
 #' by case and match the same column, cannot be bridged and are reported as an
-#' error naming the mismatch.
+#' error naming the mismatch. A column the model already references under its
+#' exact spelling is never renamed.
 #'
 #' @param stripped model-file lines with comments stripped.
 #' @param block,is_header block name of each line and header flags.
@@ -1272,10 +1304,17 @@ ferx_model_identifiers <- function(stripped, block, is_header) {
 #' @noRd
 ferx_covariate_case_bridges <- function(stripped, block, is_header, columns,
                                         renamable) {
-  refs <- ferx_model_identifiers(stripped, block, is_header)$referenced
+  all_refs <- ferx_model_identifiers(stripped, block, is_header)$referenced
   # only references that no column carries under the model's exact spelling,
   # and that some column carries under another case
-  refs <- refs[!refs %in% columns & toupper(refs) %in% toupper(columns)]
+  refs <- all_refs[!all_refs %in% columns & toupper(all_refs) %in% toupper(columns)]
+  # a column the model references under its exact spelling is never renamed
+  # away: a case-variant reference to it is then most likely not a covariate
+  # reference at all (the identifier scan is heuristic), and renaming would
+  # break the exact reference
+  refs <- refs[!vapply(refs, function(ref) {
+    any(columns[toupper(columns) == toupper(ref)] %in% all_refs)
+  }, logical(1))]
   if (length(refs) == 0) return(character(0))
   structural <- toupper(anonymized_structural_columns())
   refs <- refs[!toupper(refs) %in% structural]
