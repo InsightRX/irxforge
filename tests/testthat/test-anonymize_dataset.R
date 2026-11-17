@@ -178,7 +178,7 @@ test_that("sigdig rounds covariates and simulated concentrations", {
     EVENT = c(1, 0, 1, 0),
     DOSE = c(100, 0, 200, 0),
     CONC = c(0, 4, 0, 8),
-    WT = c(70, 70, 80, 80),
+    WT = c(70, 71, 80, 81),
     SCR = c(1.0, 1.1, 0.8, 0.9)
   )
   model <- tempfile(fileext = ".ferx")
@@ -299,7 +299,7 @@ test_that("anonymize_dataset matches simulated DV by ID and TIME, not position",
     EVID = c(1, 0, 0, 1, 0, 0),
     AMT = c(100, 0, 0, 100, 0, 0),
     DV = c(0, 5, 4, 0, 6, 7),
-    WT = c(70, 70, 70, 80, 80, 80)
+    WT = c(70, 70, 71, 80, 80, 81)
   )
   model <- tempfile(fileext = ".ferx")
   file.create(model)
@@ -581,7 +581,7 @@ test_that("score_on = 'concentration' errors without positive observed concentra
     EVENT = c(1, 0, 1, 0),
     DOSE = c(100, 0, 200, 0),
     CONC = c(0, 0, 0, 0),
-    WT = c(70, 70, 80, 80)
+    WT = c(70, 71, 80, 81)
   )
   model <- tempfile(fileext = ".ferx")
   file.create(model)
@@ -722,7 +722,7 @@ test_that("cat_covs marks numerically coded covariates as categorical", {
   dat <- data.frame(
     ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
     AMT = c(100, 0, 100, 0), DV = c(0, 5, 0, 4), SEX = c(0, 0, 1, 1),
-    WT = c(70, 70, 80, 80)
+    WT = c(70, 71, 80, 81)
   )
   model <- tempfile(fileext = ".ferx")
   file.create(model)
@@ -1037,7 +1037,7 @@ test_that("anonymize_dataset accepts reset records with a monotone time axis", {
     EVID = c(1, 0, 4, 0, 1, 0, 3, 0),
     AMT = c(100, 0, 100, 0, 100, 0, 0, 0),
     DV = c(0, 5, 0, 4, 0, 6, 0, 5),
-    WT = c(70, 70, 70, 70, 80, 80, 80, 80)
+    WT = c(70, 70, 70, 71, 80, 80, 80, 81)
   )
   model <- tempfile(fileext = ".ferx")
   file.create(model)
@@ -1236,7 +1236,7 @@ test_that("covariates without observed values are rejected up front", {
     EVID = c(1, 0, 1, 0),
     AMT = c(100, 0, 100, 0),
     DV = c(0, 5, 0, 6),
-    WT = c(70, 70, 80, 80),
+    WT = c(70, 71, 80, 81),
     HT = c(NA, 170, NA, 180),
     AST = c(NA, 20, NA, NA),
     ALT = NA_real_,
@@ -1349,7 +1349,7 @@ test_that("strip_ferx_comment and is_absolute_path follow FeRx/OS conventions", 
 test_that("unknown `...` arguments are rejected up front as unused", {
   dat <- data.frame(
     ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
-    AMT = c(100, 0, 100, 0), DV = c(0, 5, 0, 4), WT = c(70, 70, 80, 80)
+    AMT = c(100, 0, 100, 0), DV = c(0, 5, 0, 4), WT = c(70, 71, 80, 81)
   )
   model <- tempfile(fileext = ".ferx")
   file.create(model)
@@ -1418,7 +1418,7 @@ test_that("check_anonymize_dots accepts arguments of the selected sampler", {
 test_that("anonymize_dataset forwards accepted `...` arguments to the sampler", {
   dat <- data.frame(
     ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
-    AMT = c(100, 0, 100, 0), DV = c(0, 5, 0, 4), WT = c(70, 70, 80, 80)
+    AMT = c(100, 0, 100, 0), DV = c(0, 5, 0, 4), WT = c(70, 71, 80, 81)
   )
   model <- tempfile(fileext = ".ferx")
   file.create(model)
@@ -1559,7 +1559,7 @@ test_that("anonymize_dataset warns up front about model references left out of `
   dat <- data.frame(
     ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
     AMT = c(100, 0, 100, 0), DV = c(0, 4, 0, 5),
-    WT = c(70, 70, 80, 80), conc0 = c(1, 1, 2, 2)
+    WT = c(70, 71, 80, 81), conc0 = c(1, 1, 2, 2)
   )
   model <- tempfile(fileext = ".ferx")
   writeLines(c(
@@ -1706,7 +1706,7 @@ test_that("the up-front model check counts design_cols as part of the frame", {
   dat <- data.frame(
     ID = c(1, 1, 2, 2), TIME = c(0, 1, 0, 1), EVID = c(1, 0, 1, 0),
     AMT = c(100, 0, 100, 0), DV = c(0, 4, 0, 5),
-    WT = c(70, 70, 80, 80), occ = c(1, 2, 1, 2)
+    WT = c(70, 71, 80, 81), occ = c(1, 2, 1, 2)
   )
   model <- tempfile(fileext = ".ferx")
   writeLines(c("[individual_parameters]", "  CL = TVCL * WT * (1 + 0.1 * occ)"), model)
@@ -1727,4 +1727,229 @@ test_that("the up-front model check counts design_cols as part of the frame", {
     model, tempfile(fileext = ".csv"), c("ID", "TIME", "EVID", "AMT", "DV", "occ", "WT")
   )
   expect_true("  OCC = occ" %in% readLines(out))
+})
+
+test_that("two-level numeric covariates are treated as categorical (#46)", {
+  n <- 12
+  dat <- data.frame(
+    ID = rep(seq_len(n), each = 2), TIME = rep(c(0, 1), n),
+    EVID = rep(c(1, 0), n), AMT = rep(c(100, 0), n), DV = rep(c(0, 5), n),
+    WT = rep(seq(60, 115, by = 5), each = 2),
+    W4 = rep(rep(c(0, 1), each = 6), each = 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  expect_equal(find_anonymize_binary_covariates(dat, c("WT", "W4")), "W4")
+  expect_equal(find_anonymize_binary_covariates(dat, c("WT", "W4"), "W4"), character(0))
+  # detection does not depend on the number of records
+  expect_equal(find_anonymize_binary_covariates(dat[c(1, 24), ], "W4"), "W4")
+  # a constant column is not two-level
+  expect_equal(find_anonymize_binary_covariates(dat[1:8, ], "W4"), character(0))
+
+  expect_error(
+    anonymize_dataset(dat, covariates = c("WT", "W4"), model_file = model,
+                      method = "lme"),
+    "exactly two distinct values.*`W4`"
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = c("WT", "W4"), model_file = model,
+                      method = "copulas"),
+    "exactly two distinct values.*`W4`"
+  )
+
+  passed_cat_covs <- NULL
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(data, cat_covs, ...) {
+      passed_cat_covs <<- cat_covs
+      out <- data[, c("ID", "TIME", "WT", "W4")]
+      out$.design_id <- out$ID
+      out$W4 <- factor(as.character(out$W4))
+      out
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      obs <- data[data$EVID == 0, ]
+      data.frame(ID = obs$ID, TIME = obs$TIME, DV_SIM = 5)
+    }
+  )
+  expect_message(
+    out <- anonymize_dataset(dat, covariates = c("WT", "W4"), model_file = model),
+    "two-level numeric covariate.*`W4`"
+  )
+  expect_equal(passed_cat_covs, "W4")
+  expect_type(out$W4, "double")
+  expect_setequal(unique(out$W4), c(0, 1))
+
+  # declaring it in `cat_covs` silences the message
+  expect_silent(
+    anonymize_dataset(dat, covariates = c("WT", "W4"), model_file = model,
+                      cat_covs = "W4")
+  )
+})
+
+test_that("resampling that loses or distorts a level is reported (#46)", {
+  src <- data.frame(
+    W1 = c(rep(0, 54), rep(1, 46)),
+    W4 = c(rep(0, 97), rep(1, 3)),
+    WT = seq(50, 99),
+    SEX = factor(rep(c("F", "M"), 50))
+  )
+  same <- src
+  expect_silent(
+    check_anonymize_covariate_levels(src, same, names(src), cat_covs = "SEX")
+  )
+
+  out <- src
+  out$W1 <- c(rep(0, 12), rep(1, 88))
+  out$W4 <- 0
+  out$SEX <- factor(rep("F", 100), levels = c("F", "M"))
+  w <- expect_warning(
+    problems <- check_anonymize_covariate_levels(
+      src, out, names(src), cat_covs = "SEX"
+    ),
+    class = "irxforge_anonymize_level_warning"
+  )
+  expect_length(problems, 3)
+  expect_match(conditionMessage(w), "`W1`: share of level\\(s\\) `0` 0.540 -> 0.120")
+  expect_match(conditionMessage(w), "`W4`: level\\(s\\) `1` \\(source share 0.030\\) absent")
+  expect_match(conditionMessage(w), "`SEX`: level\\(s\\) `M`")
+  # continuous covariates are not checked
+  expect_no_match(conditionMessage(w), "`WT`")
+
+  # an undeclared integer code resampled as continuous gains new values
+  out <- src
+  out$W1 <- out$W1 + 0.25
+  expect_warning(
+    check_anonymize_covariate_levels(src, out, "W1"),
+    "absent from the source"
+  )
+
+  # moderate share changes are accepted
+  out <- src
+  out$W1 <- c(rep(0, 40), rep(1, 60))
+  expect_silent(check_anonymize_covariate_levels(src, out, "W1"))
+
+  # an all-missing output loses every source level
+  out <- src
+  out$SEX <- factor(rep(NA, 100), levels = c("F", "M"))
+  expect_warning(
+    check_anonymize_covariate_levels(src, out, "SEX", cat_covs = "SEX"),
+    "`SEX`: level\\(s\\) `F`, `M` .*absent from the output"
+  )
+  # an all-missing source has nothing to preserve
+  src$SEX[] <- NA
+  expect_silent(check_anonymize_covariate_levels(src, out, "SEX", cat_covs = "SEX"))
+
+  # a two-level column in a small dataset is still checked
+  small_src <- data.frame(FLAG = c(0, 1, 1))
+  small_out <- data.frame(FLAG = c(1, 1, 1))
+  expect_warning(
+    check_anonymize_covariate_levels(small_src, small_out, "FLAG"),
+    "`FLAG`: level\\(s\\) `0`"
+  )
+})
+
+test_that("sigdig does not round categorical codes, and the check sees rounded data (#46)", {
+  dat <- data.frame(
+    ID = rep(1:6, each = 2), TIME = rep(c(0, 1), 6),
+    EVID = rep(c(1, 0), 6), AMT = rep(c(100, 0), 6), DV = rep(c(0, 5), 6),
+    SITE = rep(c(10000, 10001, 10002), each = 4),
+    CODE = rep(c(10000, 10001, 10002), each = 4)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(data, ...) {
+      out <- data[, c("ID", "TIME", "SITE", "CODE")]
+      out$.design_id <- out$ID
+      out$SITE <- factor(as.character(out$SITE))
+      out
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      obs <- data[data$EVID == 0, ]
+      data.frame(ID = obs$ID, TIME = obs$TIME, DV_SIM = 5)
+    }
+  )
+  # SITE is declared categorical and keeps its codes; CODE is not, so the
+  # default `sigdig = 4` merges its levels, which the post-rounding check reports
+  w <- expect_warning(
+    out <- anonymize_dataset(
+      dat, covariates = c("SITE", "CODE"), model_file = model, cat_covs = "SITE"
+    ),
+    class = "irxforge_anonymize_level_warning"
+  )
+  expect_equal(sort(unique(out$SITE)), c(10000, 10001, 10002))
+  expect_equal(unique(out$CODE), 10000)
+  expect_match(conditionMessage(w), "`CODE`: level\\(s\\) `10001`, `10002`")
+  expect_no_match(conditionMessage(w), "`SITE`")
+})
+
+test_that("anonymize_dataset warns when a resampled covariate loses a level (#46)", {
+  n <- 12
+  dat <- data.frame(
+    ID = rep(seq_len(n), each = 2), TIME = rep(c(0, 1), n),
+    EVID = rep(c(1, 0), n), AMT = rep(c(100, 0), n), DV = rep(c(0, 5), n),
+    GRP = rep(rep(c(0, 1, 2), each = 4), each = 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(data, ...) {
+      out <- data[, c("ID", "TIME", "GRP")]
+      out$.design_id <- out$ID
+      out$GRP <- ifelse(out$GRP == 2, 1, out$GRP)
+      out
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      obs <- data[data$EVID == 0, ]
+      data.frame(ID = obs$ID, TIME = obs$TIME, DV_SIM = 5)
+    }
+  )
+  expect_warning(
+    anonymize_dataset(dat, covariates = "GRP", model_file = model),
+    "`GRP`: level\\(s\\) `2`.*absent from the output",
+    class = "irxforge_anonymize_level_warning"
+  )
+})
+
+test_that("the level check sees records removed as below LOQ (#46)", {
+  n <- 12
+  dat <- data.frame(
+    ID = rep(seq_len(n), each = 2), TIME = rep(c(0, 1), n),
+    EVID = rep(c(1, 0), n), AMT = rep(c(100, 0), n), DV = rep(c(0, 5), n),
+    # W4 is set only on the observation records of subjects 1 and 2
+    W4 = c(0, 1, 0, 1, rep(0, 2 * n - 4))
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(data, ...) {
+      out <- data[, c("ID", "TIME", "W4")]
+      out$.design_id <- out$ID
+      out$W4 <- factor(as.character(out$W4))
+      out
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      obs <- data[data$EVID == 0, ]
+      # the W4 = 1 observations simulate below the LOQ
+      data.frame(ID = obs$ID, TIME = obs$TIME, DV_SIM = ifelse(obs$W4 == 1, 0.01, 5))
+    }
+  )
+  w <- expect_warning(
+    out <- anonymize_dataset(
+      dat, covariates = "W4", model_file = model, cat_covs = "W4", loq = 1
+    ),
+    class = "irxforge_anonymize_level_warning"
+  )
+  expect_false(any(out$W4 == 1))
+  expect_match(conditionMessage(w), "`W4`: level\\(s\\) `1` .*absent from the output")
+
+  # censoring keeps the records, and with them the level
+  expect_no_warning(
+    out <- anonymize_dataset(
+      dat, covariates = "W4", model_file = model, cat_covs = "W4", loq = 1,
+      blq_method = "cens"
+    )
+  )
+  expect_equal(sum(out$W4 == 1), 2)
 })

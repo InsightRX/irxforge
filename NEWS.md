@@ -1,5 +1,22 @@
 # irxforge (development version)
 
+* `anonymize_dataset()`: a numeric covariate with exactly two distinct values
+  (e.g. a 0/1 flag), however few records carry it, that is not listed in
+  `cat_covs` is no longer resampled as continuous, which could silently drop
+  one of its levels. With `method = "mice"` it is now treated as categorical
+  (with a message naming it); with `"lme"` or `"copulas"` it is rejected with
+  an error naming it. After resampling, the record-level share of each level
+  of every discrete covariate (categorical covariates, two-level numeric
+  covariates, and whole-number covariates with at most 3 distinct values) is
+  compared with the source, and a warning (`irxforge_anonymize_level_warning`)
+  lists covariates where a source level is absent from the output (including
+  an all-missing output), values absent from the source appear, or a level's
+  share changes more than 3-fold. The check runs on the returned dataset,
+  after below-LOQ records are removed (with `loq` and
+  `blq_method = "remove"`) and after `sigdig` rounding, which no longer
+  applies to categorical covariates
+  (so numeric codes such as `10000` and `10001` are not merged) (#46).
+
 * `anonymize_dataset()`: a covariate that the model references under a spelling
   that differs only by case from its data column (e.g. `CONC0` for a `conc0`
   column) is now bridged with an added `[data]` rename (`CONC0 = conc0`) in the
