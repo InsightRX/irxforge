@@ -130,6 +130,10 @@
 #'   * `"similarity_score"`: the selected candidate's score when
 #'     `n_candidates > 1`, otherwise `NULL`.
 #'
+#' @seealso [nm_columns_read()] to choose the columns a NONMEM control stream
+#'   needs kept (pass them as `covariates` or `design_cols`), and
+#'   [nm_rewrite_input()] to ship the stream with the anonymized data.
+#'
 #' @export
 anonymize_dataset <- function(
   data,

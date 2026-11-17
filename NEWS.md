@@ -1,5 +1,15 @@
 # irxforge (development version)
 
+* New `nm_input_columns()`, `nm_columns_read()` and `nm_rewrite_input()` for
+  shipping a NONMEM control stream with a de-identified dataset.
+  `nm_columns_read()` resolves `$INPUT` by position, so a column the stream
+  renames (`SEX` for a `SEKS` header) or reads only in a `$DATA` filter
+  (`IGNORE=(C.EQ.'C')`) or `$TABLE` counts as read. `nm_rewrite_input()`
+  rebuilds `$INPUT` for the new column order keeping each column's item
+  (`CMT=DROP` stays dropped, `RATE=INFRATE` keeps its synonym), errors when a
+  column the stream reads is missing, and removes a missing `$TABLE`-only
+  column from `$TABLE` with a warning.
+
 * `anonymize_dataset()`: a covariate that the model references under a spelling
   that differs only by case from its data column (e.g. `CONC0` for a `conc0`
   column) is now bridged with an added `[data]` rename (`CONC0 = conc0`) in the

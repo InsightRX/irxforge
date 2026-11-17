@@ -172,3 +172,8 @@ Creates an anonymized NONMEM-style dataset by renumbering subjects, sampling
 new covariates, cloning observed dosing/observation designs, and replacing
 observed concentrations with FeRx-simulated values.
 }
+\seealso{
+\code{\link[=nm_columns_read]{nm_columns_read()}} to choose the columns a NONMEM control stream
+needs kept (pass them as \code{covariates} or \code{design_cols}), and
+\code{\link[=nm_rewrite_input]{nm_rewrite_input()}} to ship the stream with the anonymized data.
+}
