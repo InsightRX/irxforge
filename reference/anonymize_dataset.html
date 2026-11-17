@@ -11,7 +11,7 @@ observed concentrations with FeRx-simulated values."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">irxforge</a>
 
-    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9049</small>
+    <small class="nav-text text-danger me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Unreleased version">0.0.0.9052</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -134,6 +134,18 @@ categorical). Use this for numerically coded categorical covariates, e.g.
 returned with their original numeric codes. With <code>method = "mice"</code>, a
 warning is raised for numeric covariates that look like categorical codes
 (whole numbers with at most 3 distinct values) but are not listed here.
+A numeric covariate with exactly two distinct values (e.g. a 0/1 flag)
+has no continuous
+distribution to preserve and could lose a level if resampled as
+continuous: with <code>method = "mice"</code> it is treated as categorical (with a
+message) even when not listed here, and with <code>"lme"</code> or <code>"copulas"</code> it is
+rejected with an error naming it. After resampling, the level shares of
+each discrete covariate (categorical covariates, and covariates with at
+least 10 whole-number values and at most 3 distinct values) in the
+returned dataset (after <code>sigdig</code> rounding and below-<code>loq</code> removal) are
+compared, record by record, with the source, and a warning is raised when
+a source level is absent from the output, values absent from the source
+appear, or a level's share changes more than 3-fold.
 Categorical covariates (including factor and character columns) with
 more than 20 distinct values are rejected with an error reporting the
 level count of each categorical covariate: such a column is almost always
@@ -161,7 +173,8 @@ observations keep <code>MDV = 0</code> and are flagged via <code>CENS</code>).</
 <dd><p>number of significant digits to round the sampled covariates
 and simulated concentrations (<code>DV</code>) to, via <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">signif()</a></code>, to further obscure
 the values. Default <code>4</code>. <code>NULL</code> disables rounding. Rounding is applied
-before the <code>loq</code> comparison.</p></dd>
+before the <code>loq</code> comparison. Categorical covariates (see <code>cat_covs</code>) are
+never rounded, so distinct numeric codes are not merged.</p></dd>
 
 
 <dt id="arg-n-candidates">n_candidates<a class="anchor" aria-label="anchor" href="#arg-n-candidates"></a></dt>

@@ -97,13 +97,24 @@ anonymize_dataset(
   are returned with their original numeric codes. With
   `method = "mice"`, a warning is raised for numeric covariates that
   look like categorical codes (whole numbers with at most 3 distinct
-  values) but are not listed here. Categorical covariates (including
-  factor and character columns) with more than 20 distinct values are
-  rejected with an error reporting the level count of each categorical
-  covariate: such a column is almost always a continuous one (e.g. a
-  time, dose or occasion counter) passed as categorical by mistake, and
-  would make the MICE sampler extremely slow. Pass `max_cat_levels`
-  (through `...`) to raise this limit.
+  values) but are not listed here. A numeric covariate with exactly two
+  distinct values (e.g. a 0/1 flag) has no continuous distribution to
+  preserve and could lose a level if resampled as continuous: with
+  `method = "mice"` it is treated as categorical (with a message) even
+  when not listed here, and with `"lme"` or `"copulas"` it is rejected
+  with an error naming it. After resampling, the level shares of each
+  discrete covariate (categorical covariates, and covariates with at
+  least 10 whole-number values and at most 3 distinct values) in the
+  returned dataset (after `sigdig` rounding and below-`loq` removal) are
+  compared, record by record, with the source, and a warning is raised
+  when a source level is absent from the output, values absent from the
+  source appear, or a level's share changes more than 3-fold.
+  Categorical covariates (including factor and character columns) with
+  more than 20 distinct values are rejected with an error reporting the
+  level count of each categorical covariate: such a column is almost
+  always a continuous one (e.g. a time, dose or occasion counter) passed
+  as categorical by mistake, and would make the MICE sampler extremely
+  slow. Pass `max_cat_levels` (through `...`) to raise this limit.
 
 - loq:
 
@@ -126,7 +137,8 @@ anonymize_dataset(
   simulated concentrations (`DV`) to, via
   [`signif()`](https://rdrr.io/r/base/Round.html), to further obscure
   the values. Default `4`. `NULL` disables rounding. Rounding is applied
-  before the `loq` comparison.
+  before the `loq` comparison. Categorical covariates (see `cat_covs`)
+  are never rounded, so distinct numeric codes are not merged.
 
 - n_candidates:
 
