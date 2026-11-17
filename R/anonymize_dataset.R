@@ -50,15 +50,16 @@
 #'   returned with their original numeric codes. With `method = "mice"`, a
 #'   warning is raised for numeric covariates that look like categorical codes
 #'   (whole numbers with at most 3 distinct values) but are not listed here.
-#'   A numeric covariate with exactly two distinct values (e.g. a 0/1 flag;
-#'   checked when it has at least 10 non-missing values) has no continuous
+#'   A numeric covariate with exactly two distinct values (e.g. a 0/1 flag)
+#'   has no continuous
 #'   distribution to preserve and could lose a level if resampled as
 #'   continuous: with `method = "mice"` it is treated as categorical (with a
 #'   message) even when not listed here, and with `"lme"` or `"copulas"` it is
 #'   rejected with an error naming it. After resampling, the level shares of
 #'   each discrete covariate (categorical covariates, and covariates with at
-#'   least 10 whole-number values and at most 3 distinct values) are compared,
-#'   record by record, with the source, and a warning is raised when a source
+#'   least 10 whole-number values and at most 3 distinct values) in the
+#'   returned dataset are compared, record by record, with the source, and a
+#'   warning is raised when a source
 #'   level is absent from the output, values absent from the source appear, or
 #'   a level's share changes more than 3-fold.
 #'   Categorical covariates (including factor and character columns) with
@@ -79,7 +80,8 @@
 #' @param sigdig number of significant digits to round the sampled covariates
 #'   and simulated concentrations (`DV`) to, via [signif()], to further obscure
 #'   the values. Default `4`. `NULL` disables rounding. Rounding is applied
-#'   before the `loq` comparison.
+#'   before the `loq` comparison. Categorical covariates (see `cat_covs`) are
+#'   never rounded, so distinct numeric codes are not merged.
 #' @param n_candidates number of independent candidates to draw and score against
 #'   the observed data, keeping the closest match. Default `1` (no scoring; a
 #'   single candidate is used). When greater than 1, the candidate with the
@@ -289,20 +291,21 @@ anonymize_dataset <- function(
     ...
   )
 
-  # compare the level set and level shares of discrete covariates between the
-  # source and the resampled data, so a lost or collapsed level is reported
-  # instead of silently changing the design
-  check_anonymize_covariate_levels(
-    source = data,
-    resampled = selected$data,
-    covariates = covariates,
-    cat_covs = cat_covs
-  )
-
+  # categorical codes are labels, not measurements: rounding them could merge
+  # distinct levels (e.g. 10000 and 10001 with `sigdig = 4`)
   anonymized <- apply_anonymize_sigdig(
     data = selected$data,
-    covariates = covariates,
+    covariates = setdiff(covariates, cat_covs),
     sigdig = sigdig
+  )
+  # compare the level set and level shares of discrete covariates between the
+  # source and the returned (rounded) data, so a lost or collapsed level is
+  # reported instead of silently changing the design
+  check_anonymize_covariate_levels(
+    source = data,
+    resampled = anonymized,
+    covariates = covariates,
+    cat_covs = cat_covs
   )
   result <- apply_anonymize_blq(
     data = anonymized,
@@ -393,9 +396,7 @@ check_anonymize_dots <- function(dot_names, n_dots, method) {
 #' Find numeric covariates that take exactly two distinct values
 #'
 #' Such a column (typically a 0/1 flag) has no continuous distribution to
-#' preserve. Covariates with fewer than 10 non-missing values are not flagged,
-#' since a continuous covariate in a very small dataset can take two values by
-#' chance.
+#' preserve, regardless of how many records carry it.
 #'
 #' @param data data.frame holding the covariates.
 #' @param covariates names of the covariates to check.
@@ -409,16 +410,16 @@ find_anonymize_binary_covariates <- function(data, covariates, cat_covs = NULL) 
   covs[vapply(covs, function(cov) {
     x <- data[[cov]]
     if (!is.numeric(x)) return(FALSE)
-    x <- x[!is.na(x)]
-    length(x) >= 10 && length(unique(x)) == 2
+    length(unique(x[!is.na(x)])) == 2
   }, logical(1))]
 }
 
 #' Warn when resampling loses or distorts a level of a discrete covariate
 #'
-#' For every discrete covariate (the categorical covariates, plus numeric
-#' covariates with at least 10 non-missing source values, all whole numbers
-#' with at most 3 distinct values), compares the record-level share of each level in `source` with
+#' For every discrete covariate (the categorical covariates, numeric
+#' covariates with exactly two distinct source values, and numeric covariates
+#' with at least 10 non-missing source values, all whole numbers with at most
+#' 3 distinct values), compares the record-level share of each level in `source` with
 #' that in `resampled`. A single warning lists every covariate where a level
 #' present in the source is absent from the resampled data, where values absent
 #' from the source appear, or where a level's share changes by more than
@@ -442,7 +443,8 @@ check_anonymize_covariate_levels <- function(source, resampled, covariates,
     if (!is.numeric(x)) return(FALSE)
     x <- x[!is.na(x)]
     ux <- unique(x)
-    length(x) >= 10 && length(ux) >= 2 && length(ux) <= 3 && all(ux == round(ux))
+    length(ux) == 2 ||
+      (length(x) >= 10 && length(ux) == 3 && all(ux == round(ux)))
   }, logical(1))]
   level_shares <- function(x) {
     x <- as.character(x[!is.na(x)])
@@ -455,7 +457,9 @@ check_anonymize_covariate_levels <- function(source, resampled, covariates,
   for (cov in discrete) {
     src <- level_shares(source[[cov]])
     out <- level_shares(resampled[[cov]])
-    if (length(src) == 0 || length(out) == 0) next
+    # nothing to preserve when the source has no values; an all-missing output
+    # loses every source level and is reported as such below
+    if (length(src) == 0) next
     issues <- character(0)
     lost <- setdiff(names(src), names(out))
     if (length(lost) > 0) {

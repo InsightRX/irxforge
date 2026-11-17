@@ -75,15 +75,16 @@ categorical). Use this for numerically coded categorical covariates, e.g.
 returned with their original numeric codes. With \code{method = "mice"}, a
 warning is raised for numeric covariates that look like categorical codes
 (whole numbers with at most 3 distinct values) but are not listed here.
-A numeric covariate with exactly two distinct values (e.g. a 0/1 flag;
-checked when it has at least 10 non-missing values) has no continuous
+A numeric covariate with exactly two distinct values (e.g. a 0/1 flag)
+has no continuous
 distribution to preserve and could lose a level if resampled as
 continuous: with \code{method = "mice"} it is treated as categorical (with a
 message) even when not listed here, and with \code{"lme"} or \code{"copulas"} it is
 rejected with an error naming it. After resampling, the level shares of
 each discrete covariate (categorical covariates, and covariates with at
-least 10 whole-number values and at most 3 distinct values) are compared,
-record by record, with the source, and a warning is raised when a source
+least 10 whole-number values and at most 3 distinct values) in the
+returned dataset are compared, record by record, with the source, and a
+warning is raised when a source
 level is absent from the output, values absent from the source appear, or
 a level's share changes more than 3-fold.
 Categorical covariates (including factor and character columns) with
@@ -107,7 +108,8 @@ observations keep \code{MDV = 0} and are flagged via \code{CENS}).}
 \item{sigdig}{number of significant digits to round the sampled covariates
 and simulated concentrations (\code{DV}) to, via \code{\link[=signif]{signif()}}, to further obscure
 the values. Default \code{4}. \code{NULL} disables rounding. Rounding is applied
-before the \code{loq} comparison.}
+before the \code{loq} comparison. Categorical covariates (see \code{cat_covs}) are
+never rounded, so distinct numeric codes are not merged.}
 
 \item{n_candidates}{number of independent candidates to draw and score against
 the observed data, keeping the closest match. Default \code{1} (no scoring; a
