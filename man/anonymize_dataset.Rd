@@ -83,10 +83,10 @@ message) even when not listed here, and with \code{"lme"} or \code{"copulas"} it
 rejected with an error naming it. After resampling, the level shares of
 each discrete covariate (categorical covariates, and covariates with at
 least 10 whole-number values and at most 3 distinct values) in the
-returned dataset are compared, record by record, with the source, and a
-warning is raised when a source
-level is absent from the output, values absent from the source appear, or
-a level's share changes more than 3-fold.
+returned dataset (after \code{sigdig} rounding and below-\code{loq} removal) are
+compared, record by record, with the source, and a warning is raised when
+a source level is absent from the output, values absent from the source
+appear, or a level's share changes more than 3-fold.
 Categorical covariates (including factor and character columns) with
 more than 20 distinct values are rejected with an error reporting the
 level count of each categorical covariate: such a column is almost always

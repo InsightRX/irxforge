@@ -1911,3 +1911,45 @@ test_that("anonymize_dataset warns when a resampled covariate loses a level (#46
     class = "irxforge_anonymize_level_warning"
   )
 })
+
+test_that("the level check sees records removed as below LOQ (#46)", {
+  n <- 12
+  dat <- data.frame(
+    ID = rep(seq_len(n), each = 2), TIME = rep(c(0, 1), n),
+    EVID = rep(c(1, 0), n), AMT = rep(c(100, 0), n), DV = rep(c(0, 5), n),
+    # W4 is set only on the observation records of subjects 1 and 2
+    W4 = c(0, 1, 0, 1, rep(0, 2 * n - 4))
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(data, ...) {
+      out <- data[, c("ID", "TIME", "W4")]
+      out$.design_id <- out$ID
+      out$W4 <- factor(as.character(out$W4))
+      out
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      obs <- data[data$EVID == 0, ]
+      # the W4 = 1 observations simulate below the LOQ
+      data.frame(ID = obs$ID, TIME = obs$TIME, DV_SIM = ifelse(obs$W4 == 1, 0.01, 5))
+    }
+  )
+  w <- expect_warning(
+    out <- anonymize_dataset(
+      dat, covariates = "W4", model_file = model, cat_covs = "W4", loq = 1
+    ),
+    class = "irxforge_anonymize_level_warning"
+  )
+  expect_false(any(out$W4 == 1))
+  expect_match(conditionMessage(w), "`W4`: level\\(s\\) `1` .*absent from the output")
+
+  # censoring keeps the records, and with them the level
+  expect_no_warning(
+    out <- anonymize_dataset(
+      dat, covariates = "W4", model_file = model, cat_covs = "W4", loq = 1,
+      blq_method = "cens"
+    )
+  )
+  expect_equal(sum(out$W4 == 1), 2)
+})

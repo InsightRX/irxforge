@@ -58,10 +58,10 @@
 #'   rejected with an error naming it. After resampling, the level shares of
 #'   each discrete covariate (categorical covariates, and covariates with at
 #'   least 10 whole-number values and at most 3 distinct values) in the
-#'   returned dataset are compared, record by record, with the source, and a
-#'   warning is raised when a source
-#'   level is absent from the output, values absent from the source appear, or
-#'   a level's share changes more than 3-fold.
+#'   returned dataset (after `sigdig` rounding and below-`loq` removal) are
+#'   compared, record by record, with the source, and a warning is raised when
+#'   a source level is absent from the output, values absent from the source
+#'   appear, or a level's share changes more than 3-fold.
 #'   Categorical covariates (including factor and character columns) with
 #'   more than 20 distinct values are rejected with an error reporting the
 #'   level count of each categorical covariate: such a column is almost always
@@ -298,21 +298,21 @@ anonymize_dataset <- function(
     covariates = setdiff(covariates, cat_covs),
     sigdig = sigdig
   )
-  # compare the level set and level shares of discrete covariates between the
-  # source and the returned (rounded) data, so a lost or collapsed level is
-  # reported instead of silently changing the design
-  check_anonymize_covariate_levels(
-    source = data,
-    resampled = anonymized,
-    covariates = covariates,
-    cat_covs = cat_covs
-  )
   result <- apply_anonymize_blq(
     data = anonymized,
     loq = loq,
     blq_method = blq_method
   )
   result <- recompute_anonymized_mdv(result)
+  # compare the level set and level shares of discrete covariates between the
+  # source and the returned data (after rounding and below-LOQ removal), so a
+  # lost or collapsed level is reported instead of silently changing the design
+  check_anonymize_covariate_levels(
+    source = data,
+    resampled = result,
+    covariates = covariates,
+    cat_covs = cat_covs
+  )
   attr(result, "design_map") <- attr(selected$data, "design_map")
   attr(result, "similarity_score") <- selected$score
   result
@@ -414,7 +414,7 @@ find_anonymize_binary_covariates <- function(data, covariates, cat_covs = NULL) 
   }, logical(1))]
 }
 
-#' Warn when resampling loses or distorts a level of a discrete covariate
+#' Warn when anonymization loses or distorts a level of a discrete covariate
 #'
 #' For every discrete covariate (the categorical covariates, numeric
 #' covariates with exactly two distinct source values, and numeric covariates
@@ -426,7 +426,8 @@ find_anonymize_binary_covariates <- function(data, covariates, cat_covs = NULL) 
 #' `max_ratio`-fold.
 #'
 #' @param source the original data.
-#' @param resampled the anonymized data (before rounding and BLQ handling).
+#' @param resampled the returned anonymized data (after rounding and BLQ
+#'   handling).
 #' @param covariates names of the resampled covariates.
 #' @param cat_covs names of the categorical covariates.
 #' @param max_ratio largest accepted fold change of a level's share.
@@ -494,12 +495,14 @@ check_anonymize_covariate_levels <- function(source, resampled, covariates,
   if (length(problems) > 0) {
     warning(warningCondition(
       paste0(
-        "Resampling changed the level distribution of discrete covariate(s) ",
+        "Anonymization changed the level distribution of discrete covariate(s) ",
         "(record-level shares, source -> output):\n",
         paste0("  * ", problems, collapse = "\n"),
         "\nThe anonymized dataset may not reflect the source design. Declare ",
         "categorical codes in `cat_covs`, or pass study-design columns that ",
-        "must not be resampled in `design_cols`."
+        "must not be resampled in `design_cols`. With `loq`, removing ",
+        "below-LOQ records (`blq_method = \"remove\"`) can also drop levels; ",
+        "`blq_method = \"cens\"` keeps them."
       ),
       class = "irxforge_anonymize_level_warning"
     ))

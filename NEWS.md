@@ -12,7 +12,9 @@
   lists covariates where a source level is absent from the output (including
   an all-missing output), values absent from the source appear, or a level's
   share changes more than 3-fold. The check runs on the returned dataset,
-  after `sigdig` rounding, which no longer applies to categorical covariates
+  after below-LOQ records are removed (with `loq` and
+  `blq_method = "remove"`) and after `sigdig` rounding, which no longer
+  applies to categorical covariates
   (so numeric codes such as `10000` and `10001` are not merged) (#46).
 
 * `anonymize_dataset()`: a covariate that the model references under a spelling
