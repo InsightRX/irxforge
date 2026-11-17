@@ -1728,3 +1728,130 @@ test_that("the up-front model check counts design_cols as part of the frame", {
   )
   expect_true("  OCC = occ" %in% readLines(out))
 })
+
+test_that("two-level numeric covariates are treated as categorical (#46)", {
+  n <- 12
+  dat <- data.frame(
+    ID = rep(seq_len(n), each = 2), TIME = rep(c(0, 1), n),
+    EVID = rep(c(1, 0), n), AMT = rep(c(100, 0), n), DV = rep(c(0, 5), n),
+    WT = rep(seq(60, 115, by = 5), each = 2),
+    W4 = rep(rep(c(0, 1), each = 6), each = 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+
+  expect_equal(find_anonymize_binary_covariates(dat, c("WT", "W4")), "W4")
+  expect_equal(find_anonymize_binary_covariates(dat, c("WT", "W4"), "W4"), character(0))
+  # too few values to tell a flag from a continuous covariate
+  expect_equal(find_anonymize_binary_covariates(dat[1:8, ], "W4"), character(0))
+
+  expect_error(
+    anonymize_dataset(dat, covariates = c("WT", "W4"), model_file = model,
+                      method = "lme"),
+    "exactly two distinct values.*`W4`"
+  )
+  expect_error(
+    anonymize_dataset(dat, covariates = c("WT", "W4"), model_file = model,
+                      method = "copulas"),
+    "exactly two distinct values.*`W4`"
+  )
+
+  passed_cat_covs <- NULL
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(data, cat_covs, ...) {
+      passed_cat_covs <<- cat_covs
+      out <- data[, c("ID", "TIME", "WT", "W4")]
+      out$.design_id <- out$ID
+      out$W4 <- factor(as.character(out$W4))
+      out
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      obs <- data[data$EVID == 0, ]
+      data.frame(ID = obs$ID, TIME = obs$TIME, DV_SIM = 5)
+    }
+  )
+  expect_message(
+    out <- anonymize_dataset(dat, covariates = c("WT", "W4"), model_file = model),
+    "two-level numeric covariate.*`W4`"
+  )
+  expect_equal(passed_cat_covs, "W4")
+  expect_type(out$W4, "double")
+  expect_setequal(unique(out$W4), c(0, 1))
+
+  # declaring it in `cat_covs` silences the message
+  expect_silent(
+    anonymize_dataset(dat, covariates = c("WT", "W4"), model_file = model,
+                      cat_covs = "W4")
+  )
+})
+
+test_that("resampling that loses or distorts a level is reported (#46)", {
+  src <- data.frame(
+    W1 = c(rep(0, 54), rep(1, 46)),
+    W4 = c(rep(0, 97), rep(1, 3)),
+    WT = seq(50, 99),
+    SEX = factor(rep(c("F", "M"), 50))
+  )
+  same <- src
+  expect_silent(
+    check_anonymize_covariate_levels(src, same, names(src), cat_covs = "SEX")
+  )
+
+  out <- src
+  out$W1 <- c(rep(0, 12), rep(1, 88))
+  out$W4 <- 0
+  out$SEX <- factor(rep("F", 100), levels = c("F", "M"))
+  w <- expect_warning(
+    problems <- check_anonymize_covariate_levels(
+      src, out, names(src), cat_covs = "SEX"
+    ),
+    class = "irxforge_anonymize_level_warning"
+  )
+  expect_length(problems, 3)
+  expect_match(conditionMessage(w), "`W1`: share of level\\(s\\) `0` 0.540 -> 0.120")
+  expect_match(conditionMessage(w), "`W4`: level\\(s\\) `1` \\(source share 0.030\\) absent")
+  expect_match(conditionMessage(w), "`SEX`: level\\(s\\) `M`")
+  # continuous covariates are not checked
+  expect_no_match(conditionMessage(w), "`WT`")
+
+  # an undeclared integer code resampled as continuous gains new values
+  out <- src
+  out$W1 <- out$W1 + 0.25
+  expect_warning(
+    check_anonymize_covariate_levels(src, out, "W1"),
+    "absent from the source"
+  )
+
+  # moderate share changes are accepted
+  out <- src
+  out$W1 <- c(rep(0, 40), rep(1, 60))
+  expect_silent(check_anonymize_covariate_levels(src, out, "W1"))
+})
+
+test_that("anonymize_dataset warns when a resampled covariate loses a level (#46)", {
+  n <- 12
+  dat <- data.frame(
+    ID = rep(seq_len(n), each = 2), TIME = rep(c(0, 1), n),
+    EVID = rep(c(1, 0), n), AMT = rep(c(100, 0), n), DV = rep(c(0, 5), n),
+    GRP = rep(rep(c(0, 1, 2), each = 4), each = 2)
+  )
+  model <- tempfile(fileext = ".ferx")
+  file.create(model)
+  local_mocked_bindings(
+    sample_covariates_mice_timevarying = function(data, ...) {
+      out <- data[, c("ID", "TIME", "GRP")]
+      out$.design_id <- out$ID
+      out$GRP <- ifelse(out$GRP == 2, 1, out$GRP)
+      out
+    },
+    simulate_anonymized_concentrations = function(model_file, data, seed = NULL) {
+      obs <- data[data$EVID == 0, ]
+      data.frame(ID = obs$ID, TIME = obs$TIME, DV_SIM = 5)
+    }
+  )
+  expect_warning(
+    anonymize_dataset(dat, covariates = "GRP", model_file = model),
+    "`GRP`: level\\(s\\) `2`.*absent from the output",
+    class = "irxforge_anonymize_level_warning"
+  )
+})
